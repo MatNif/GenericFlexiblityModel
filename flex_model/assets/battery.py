@@ -565,14 +565,8 @@ class BatteryCostModel(CostModel):
             1. Internal usage: throughput * p_int(t)
             2. Energy cost: E_net * p_E_buy(t) or E_net * p_E_sell(t)
         """
-        # Extract activation parameters (REQUIRED - fail fast if missing)
-        required_keys = {'P_grid_import', 'P_grid_export', 'dt_hours'}
-        missing_keys = required_keys - activation.keys()
-        if missing_keys:
-            raise ValueError(
-                f"Missing required activation parameters: {missing_keys}. "
-                f"Expected keys: {required_keys}"
-            )
+        # Validate and extract activation parameters (REQUIRED - fail fast if missing)
+        self._validate_activation_keys(activation, {'P_grid_import', 'P_grid_export', 'dt_hours'})
 
         P_import = activation['P_grid_import']
         P_export = activation['P_grid_export']

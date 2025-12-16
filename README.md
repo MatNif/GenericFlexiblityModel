@@ -109,8 +109,8 @@ battery_cost = BatteryCostModel(
     c_inv=500.0,                          # 500 CHF/kWh investment
     n_lifetime=10.0,                      # 10 year lifetime
     p_int=0.05,                           # 0.05 CHF/kWh degradation
-    p_E_buy={0: 0.20, 1: 0.25, ...},     # Time-varying buy prices
-    p_E_sell={0: 0.18, 1: 0.23, ...},    # Time-varying sell prices
+    p_E_buy={0: 0.20, 1: 0.25, ...},      # Time-varying buy prices
+    p_E_sell={0: 0.18, 1: 0.23, ...},     # Time-varying sell prices
 )
 
 # 3. Compose operational interface

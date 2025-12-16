@@ -263,6 +263,34 @@ class CostModel(ABC):
             # Scalar value (constant over time)
             return lambda t: float(param)
 
+    @staticmethod
+    def _validate_activation_keys(activation: Dict, required_keys: set) -> None:
+        """
+        Validate that activation dict contains all required keys.
+
+        Args:
+            activation:
+                Dictionary with operational decision parameters.
+
+            required_keys:
+                Set of keys that must be present in activation dict.
+
+        Raises:
+            ValueError: If any required keys are missing from activation dict.
+
+        Example:
+            >>> self._validate_activation_keys(activation, {'P_grid_import', 'P_grid_export', 'dt_hours'})
+        """
+        if not isinstance(activation, dict):
+            raise TypeError(f"activation must be a dict, got {type(activation).__name__}")
+
+        if not required_keys.issubset(activation.keys()):
+            missing = required_keys - activation.keys()
+            raise ValueError(
+                f"Activation dict missing required keys: {missing}. "
+                f"Got keys: {set(activation.keys())}"
+            )
+
     # ------------------------------------------------------------------
     # Public time-dependent price accessors
     # ------------------------------------------------------------------
