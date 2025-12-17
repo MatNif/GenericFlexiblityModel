@@ -373,25 +373,32 @@ class BatteryUnit(FlexUnit):
         Power limits are determined by:
             1. Nameplate power rating (self.power_kw)
             2. Available energy capacity (E_minus for charging, E_plus for discharging)
-            3. Availability factor (if configured)
+            3. Efficiency losses (charging stores less, discharging depletes more)
+            4. Availability factor (if configured)
 
         Returns:
             (P_draw_max, P_inject_max) in [kW].
-            - P_draw_max: Maximum power to draw (charge battery)
-            - P_inject_max: Maximum power to inject (discharge battery)
+            - P_draw_max: Maximum power to draw (charge battery) [kW at grid connection]
+            - P_inject_max: Maximum power to inject (discharge battery) [kW at grid connection]
         """
         # Base power limit from nameplate rating and availability
         P_rated = self.power_kw * self.availability(t)
 
         # Charge limit: limited by available capacity (E_minus)
-        # Can't charge more than remaining capacity allows
-        # P_max = E_available / dt (energy constraint on power)
-        P_draw_max = min(P_rated, self.E_minus / DT_HOURS)
+        # When charging at power P for time dt:
+        #   - Grid imports: P * dt
+        #   - Battery stores: P * dt * efficiency (less due to losses)
+        # Therefore: P * dt * efficiency <= E_minus
+        # So: P <= E_minus / (dt * efficiency)
+        P_draw_max = min(P_rated, self.E_minus / (DT_HOURS * self.efficiency))
 
         # Discharge limit: limited by stored energy (E_plus)
-        # Can't discharge more than stored energy allows
-        # P_max = E_available / dt (energy constraint on power)
-        P_inject_max = min(P_rated, self.E_plus / DT_HOURS)
+        # When discharging at power P for time dt:
+        #   - Grid exports: P * dt
+        #   - Battery depletes: P * dt / efficiency (more due to losses)
+        # Therefore: P * dt / efficiency <= E_plus
+        # So: P <= E_plus * efficiency / dt
+        P_inject_max = min(P_rated, self.E_plus * self.efficiency / DT_HOURS)
 
         return P_draw_max, P_inject_max
 
@@ -754,6 +761,44 @@ class BatteryFlex(FlexAsset):
 
         if P_grid_import > 1e-6 or P_grid_export > 1e-6:
             self._num_activations += 1
+
+    def max_charge_power(self, t: int) -> float:
+        """
+        Return maximum feasible charging power at time t.
+
+        Considers:
+            - Nameplate power rating
+            - Available capacity (E_minus)
+            - Availability factor
+            - SOC limits
+
+        Args:
+            t: Time index.
+
+        Returns:
+            Maximum charging power [kW] that can be applied at time t.
+        """
+        P_charge_max, _ = self.unit.power_limits(t)
+        return P_charge_max
+
+    def max_discharge_power(self, t: int) -> float:
+        """
+        Return maximum feasible discharging power at time t.
+
+        Considers:
+            - Nameplate power rating
+            - Stored energy (E_plus)
+            - Availability factor
+            - SOC limits
+
+        Args:
+            t: Time index.
+
+        Returns:
+            Maximum discharging power [kW] that can be applied at time t.
+        """
+        _, P_discharge_max = self.unit.power_limits(t)
+        return P_discharge_max
 
     def get_metrics(self) -> Dict[str, Any]:
         """

@@ -52,3 +52,8 @@ env/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Example data files (but keep templates)
+examples/*/data/*.csv
+!examples/*/data/*_template.csv
+examples/*/results/
