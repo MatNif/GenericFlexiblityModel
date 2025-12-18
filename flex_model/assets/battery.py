@@ -109,6 +109,7 @@ from flex_model.core.flex_unit import FlexUnit
 from flex_model.core.cost_model import CostModel, TimeDependentValue
 from flex_model.core.flex_asset import FlexAsset
 from flex_model.settings import DT_HOURS
+from flex_model.optimization import LinearModel
 
 
 class BatteryUnit(FlexUnit):
@@ -497,8 +498,6 @@ class BatteryCostModel(CostModel):
         n_lifetime: float,
         c_fix: float = 0.0,
         p_int: TimeDependentValue = 0.0,
-        p_E_buy: TimeDependentValue = 0.0,
-        p_E_sell: TimeDependentValue = 0.0,
     ) -> None:
         """
         Args:
@@ -520,17 +519,13 @@ class BatteryCostModel(CostModel):
             p_int:
                 Internal utilization cost [CHF/kWh of throughput].
                 Represents variable O&M costs proportional to usage (cycling wear, etc.).
-                This is separate from degradation, which is captured via investment cost
-                amortization (c_inv / n_lifetime).
-                Example: 0.01-0.05 CHF/kWh for maintenance triggered by cycling
+                Captures degradation and cycle-dependent maintenance.
+                Example: 0.01-0.05 CHF/kWh for cycling wear.
 
-            p_E_buy:
-                Energy import price [CHF/kWh] when charging.
-                Can be time-varying to capture spot price fluctuations.
-
-            p_E_sell:
-                Energy export price [CHF/kWh] when discharging.
-                Typically lower than p_E_buy due to market spreads.
+        Note:
+            Energy prices (p_E_buy, p_E_sell) are NOT included in battery costs.
+            The battery is an owned asset - energy arbitrage value comes from
+            avoiding market purchases/sales, not from internal energy prices.
         """
         super().__init__(
             name=name,
@@ -539,8 +534,8 @@ class BatteryCostModel(CostModel):
             c_fix=c_fix,
             p_int=p_int,
             C_event=0.0,  # Batteries typically have no start-up costs
-            p_E_buy=p_E_buy,
-            p_E_sell=p_E_sell,
+            p_E_buy=0.0,  # No energy prices for owned battery
+            p_E_sell=0.0,  # No energy prices for owned battery
             p_P=0.0,  # Reserve capacity payments can be added via p_P
             p_CO2=0.0,  # CO2 costs handled externally
         )
@@ -565,12 +560,9 @@ class BatteryCostModel(CostModel):
                 Operation: {'P_grid_import': float, 'P_grid_export': float, 'dt_hours': float}
 
         Returns:
-            Total cost [CHF] for this time step.
-            Positive = net cost, Negative = net revenue.
-
-        Cost components:
-            1. Internal usage: throughput * p_int(t)
-            2. Energy cost: E_net * p_E_buy(t) or E_net * p_E_sell(t)
+            Operational cost [CHF] for this time step.
+            Only includes degradation/cycling costs (p_int * throughput).
+            No energy prices - battery is an owned asset.
         """
         # Validate and extract activation parameters (REQUIRED - fail fast if missing)
         self._validate_activation_keys(activation, {'P_grid_import', 'P_grid_export', 'dt_hours'})
@@ -579,21 +571,11 @@ class BatteryCostModel(CostModel):
         P_export = activation['P_grid_export']
         dt_hours = activation['dt_hours']
 
-        # 1. Internal utilization cost (proportional to throughput)
+        # Internal utilization cost (degradation/cycling wear)
         throughput_kwh = (P_import + P_export) * dt_hours
         cost_usage = throughput_kwh * self.p_int(t)
 
-        # 2. Energy cost (buy when importing, sell when exporting)
-        E_net = (P_import - P_export) * dt_hours  # Positive = net import (charging)
-
-        if E_net > 0:
-            # Net import (charging): buying energy
-            cost_energy = E_net * self.p_E_buy(t)
-        else:
-            # Net export (discharging): selling energy (revenue is negative cost)
-            cost_energy = E_net * self.p_E_sell(t)  # E_net is negative, so this is negative
-
-        return cost_usage + cost_energy
+        return cost_usage
 
     # Note: annualized_investment() is inherited from CostModel base class
     # Note: total_cost() is inherited from CostModel base class
@@ -813,4 +795,120 @@ class BatteryFlex(FlexAsset):
         metrics['current_soc'] = self.unit.soc()
         metrics['current_energy_stored'] = self.unit.E_plus
         return metrics
+
+    def get_linear_model(
+        self,
+        n_timesteps: int,
+        dt_hours: float,
+        initial_soc: float = 0.5,
+    ) -> LinearModel:
+        """
+        Convert battery to linear optimization model.
+
+        Creates decision variables for battery operation and state, with constraints
+        for SOC dynamics, efficiency losses, self-discharge, and operational limits.
+
+        Args:
+            n_timesteps: Number of timesteps in optimization horizon.
+            dt_hours: Duration of each timestep [h].
+            initial_soc: Initial state of charge [0-1].
+
+        Returns:
+            LinearModel representing this battery asset.
+        """
+        import numpy as np
+
+        # Extract battery parameters
+        capacity = self.unit.C_spec
+        power_kw = self.unit.power_kw
+        efficiency = self.unit.efficiency
+        soc_min = self.unit.soc_min
+        soc_max = self.unit.soc_max
+        self_discharge_rate = self.unit.self_discharge_per_hour
+
+        # Decision variables layout:
+        # [P_charge_0, ..., P_charge_T, P_discharge_0, ..., P_discharge_T, E_0, ..., E_T]
+        # where E_t is stored energy [kWh] at timestep t
+        n_vars = 3 * n_timesteps
+
+        # Variable names
+        var_names = []
+        for t in range(n_timesteps):
+            var_names.append(f"{self.name}_P_charge_{t}")
+        for t in range(n_timesteps):
+            var_names.append(f"{self.name}_P_discharge_{t}")
+        for t in range(n_timesteps):
+            var_names.append(f"{self.name}_E_{t}")
+
+        # Variable bounds
+        var_bounds = []
+        # Power bounds: 0 <= P_charge/discharge <= power_kw
+        var_bounds += [(0.0, power_kw)] * (2 * n_timesteps)
+        # Energy bounds: soc_min * capacity <= E <= soc_max * capacity
+        E_min = soc_min * capacity
+        E_max = soc_max * capacity
+        var_bounds += [(E_min, E_max)] * n_timesteps
+
+        # Cost coefficients: degradation cost per throughput
+        cost_coefficients = np.zeros(n_vars)
+        for t in range(n_timesteps):
+            # Degradation cost for charging
+            cost_coefficients[t] = self.cost_model.p_int(t) * dt_hours
+            # Degradation cost for discharging
+            cost_coefficients[n_timesteps + t] = self.cost_model.p_int(t) * dt_hours
+
+        # Build constraints
+        constraints_eq = []
+        bounds_eq = []
+        constraints_ub = []
+        bounds_ub = []
+
+        # Initial SOC constraint (equality)
+        # E[0] = initial_soc * capacity
+        row = np.zeros(n_vars)
+        row[2 * n_timesteps] = 1.0  # E[0]
+        constraints_eq.append(row)
+        bounds_eq.append(initial_soc * capacity)
+
+        # SOC dynamics constraints (equality for each timestep)
+        # E[t+1] = E[t] + (P_charge[t] * eff - P_discharge[t] / eff - self_discharge) * dt
+        # Rearranged: E[t+1] - E[t] - P_charge[t]*eff*dt + P_discharge[t]/eff*dt = -self_discharge*capacity*dt
+        for t in range(n_timesteps - 1):
+            row = np.zeros(n_vars)
+            row[t] = -efficiency * dt_hours  # P_charge[t]
+            row[n_timesteps + t] = dt_hours / efficiency  # P_discharge[t]
+            row[2 * n_timesteps + t] = -1.0  # E[t]
+            row[2 * n_timesteps + t + 1] = 1.0  # E[t+1]
+            constraints_eq.append(row)
+            bounds_eq.append(-self_discharge_rate * capacity * dt_hours)
+
+        # Convert to numpy arrays
+        A_eq = np.array(constraints_eq) if constraints_eq else None
+        b_eq = np.array(bounds_eq) if bounds_eq else None
+        A_ub = np.array(constraints_ub) if constraints_ub else None
+        b_ub = np.array(bounds_ub) if bounds_ub else None
+
+        # Power mapping for energy balance
+        # net_power[t] = P_charge[t] - P_discharge[t]
+        # (charging takes power from grid, discharging provides power to grid)
+        power_indices = {}
+        for t in range(n_timesteps):
+            power_indices[t] = [
+                (t, 1.0),  # P_charge contributes +1.0 (import)
+                (n_timesteps + t, -1.0),  # P_discharge contributes -1.0 (export)
+            ]
+
+        return LinearModel(
+            name=self.name,
+            n_timesteps=n_timesteps,
+            n_vars=n_vars,
+            var_names=var_names,
+            var_bounds=var_bounds,
+            cost_coefficients=cost_coefficients,
+            A_eq=A_eq,
+            b_eq=b_eq,
+            A_ub=A_ub,
+            b_ub=b_ub,
+            power_indices=power_indices,
+        )
 

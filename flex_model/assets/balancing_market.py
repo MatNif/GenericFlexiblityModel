@@ -86,6 +86,7 @@ from typing import Any, Dict
 
 from flex_model.core.cost_model import CostModel, TimeDependentValue
 from flex_model.core.flex_asset import FlexAsset
+from flex_model.optimization import LinearModel
 
 
 class BalancingMarketCost(CostModel):
@@ -319,3 +320,70 @@ class BalancingMarketFlex(FlexAsset):
             'total_cost_eur': self._total_cost_eur,
             'num_activations': self._num_activations,
         }
+
+    def get_linear_model(self, n_timesteps: int, dt_hours: float) -> LinearModel:
+        """
+        Convert market settlement to linear optimization model.
+
+        Creates decision variables for market import/export at each timestep
+        with associated costs. No internal constraints (market is unlimited).
+
+        Args:
+            n_timesteps: Number of timesteps in optimization horizon.
+            dt_hours: Duration of each timestep [h].
+
+        Returns:
+            LinearModel representing this market asset.
+        """
+        import numpy as np
+
+        # Decision variables: P_import[t], P_export[t] for each timestep
+        # Total: 2 * n_timesteps variables
+        n_vars = 2 * n_timesteps
+
+        # Variable names
+        var_names = []
+        for t in range(n_timesteps):
+            var_names.append(f"{self.name}_P_import_{t}")
+        for t in range(n_timesteps):
+            var_names.append(f"{self.name}_P_export_{t}")
+
+        # Variable bounds: all >= 0, no upper limit (market unlimited)
+        var_bounds = [(0.0, None) for _ in range(n_vars)]
+
+        # Cost coefficients
+        # Cost = sum_t [p_buy[t] * P_import[t] * dt - p_sell[t] * P_export[t] * dt]
+        cost_coefficients = np.zeros(n_vars)
+        for t in range(n_timesteps):
+            cost_coefficients[t] = self.cost_model.p_E_buy(t) * dt_hours  # Import cost
+            cost_coefficients[n_timesteps + t] = -self.cost_model.p_E_sell(t) * dt_hours  # Export revenue (negative cost)
+
+        # No internal constraints (market is unlimited)
+        A_eq = None
+        b_eq = None
+        A_ub = None
+        b_ub = None
+
+        # Power mapping for energy balance
+        # net_power[t] = P_import[t] - P_export[t]
+        # (importing means positive power demand, exporting means negative demand)
+        power_indices = {}
+        for t in range(n_timesteps):
+            power_indices[t] = [
+                (t, 1.0),  # P_import contributes +1.0
+                (n_timesteps + t, -1.0),  # P_export contributes -1.0
+            ]
+
+        return LinearModel(
+            name=self.name,
+            n_timesteps=n_timesteps,
+            n_vars=n_vars,
+            var_names=var_names,
+            var_bounds=var_bounds,
+            cost_coefficients=cost_coefficients,
+            A_eq=A_eq,
+            b_eq=b_eq,
+            A_ub=A_ub,
+            b_ub=b_ub,
+            power_indices=power_indices,
+        )
