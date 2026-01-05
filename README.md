@@ -190,25 +190,247 @@ GenericFlexiblityModel/
 
 ## Optimization Integration
 
-The framework is designed to integrate with optimization algorithms for finding optimal operation schedules. The `FlexAsset` interface provides:
+The framework is designed to integrate with multiple optimization algorithms for finding optimal operation schedules. The `FlexAsset` interface provides two key methods:
 
-- **evaluate_operation()**: For optimization algorithms to query feasibility and costs
+- **evaluate_operation()**: For optimization algorithms to query feasibility and costs without modifying state
 - **execute_operation()**: To apply the optimal solution and update system state
 
-Example optimization workflow:
+### Optimization Workflow
+
 1. Optimizer proposes an operation (e.g., "charge battery at 30 kW")
 2. FlexAsset evaluates feasibility and calculates cost
-3. Optimizer explores solution space (linear programming, MILP, heuristics, etc.)
+3. Optimizer explores solution space using its algorithm-specific approach
 4. Optimal operations are executed to update system state
 
-The framework is **optimization-algorithm agnostic** - it can work with:
-- Linear programming (LP)
-- Mixed-integer linear programming (MILP)
-- Dynamic programming
-- Heuristic methods
-- Reinforcement learning
+### Implemented Optimizers
 
-Future work will include reference implementations of common optimization approaches.
+#### ✅ Linear Programming (LP)
+**Location:** `flex_model/optimization/lp_optimizer.py`
+
+**Approach:** Converts FlexAssets to `LinearModel` matrix representation and solves globally optimal solution using scipy's HiGHS solver.
+
+**Use cases:**
+- Assets with linear constraints and costs (battery, market settlement)
+- Multi-asset coordination with global energy balance
+- Benchmark for optimal solutions
+
+**Limitations:** Only handles convex, linear problems. Cannot model discrete decisions or non-linear relationships.
+
+#### ✅ Greedy Heuristic
+**Location:** `examples/battery_vs_market/greedy_optimizer.py`
+
+**Approach:** Time-sequential, rule-based decision making with threshold logic.
+
+**Use cases:**
+- Fast approximate solutions
+- Real-time control where perfect foresight isn't available
+- Baseline comparison for more sophisticated methods
+
+**Limitations:** Myopic (no future foresight), sub-optimal solutions.
+
+### Planned Optimizers
+
+The framework is **optimization-algorithm agnostic** and designed to support:
+
+#### 🚧 Mixed-Integer Linear Programming (MILP)
+**Planned implementation:** Extend `LinearModel` to support integer decision variables.
+
+**Use cases:**
+- Discrete operating states (on/off decisions)
+- PV curtailment levels
+- Scheduling with binary availability constraints
+
+**Approach:** Extends LP with integer variables, uses commercial solvers (Gurobi, CPLEX) or open-source (HiGHS with MILP support).
+
+#### 🚧 Dynamic Programming (DP)
+**Planned implementation:** State-space representation with backward induction.
+
+**Use cases:**
+- Sequential decision problems with state dependencies
+- Stochastic optimization (if extended to SDP)
+- Problems where Bellman optimality principle applies
+
+**Approach:** Discretize state space (e.g., SOC levels), compute value function backward in time.
+
+#### 🚧 Genetic Algorithms (GA)
+**Planned implementation:** Population-based evolutionary optimization.
+
+**Use cases:**
+- Non-convex, non-linear objective functions
+- Complex constraints that don't fit LP/MILP formulations
+- Heat pumps with COP curves, thermal systems with stratification
+
+**Approach:** Encode operation schedules as chromosomes, evolve through selection, crossover, and mutation.
+
+#### 🚧 Particle Swarm Optimization (PSO)
+**Planned implementation:** Swarm intelligence approach.
+
+**Use cases:**
+- Similar to GA, but often faster convergence
+- Continuous decision spaces
+- Multi-modal optimization landscapes
+
+**Approach:** Particles explore solution space guided by personal and global best solutions.
+
+#### 🚧 Simulated Annealing (SA)
+**Planned implementation:** Probabilistic single-solution metaheuristic.
+
+**Use cases:**
+- Escaping local optima in non-convex problems
+- Faster than population methods for certain problem structures
+- When solution quality vs. computation time tradeoff is important
+
+**Approach:** Random walk with probabilistic acceptance of worse solutions, cooling schedule.
+
+#### 🚧 Reinforcement Learning (RL)
+**Planned implementation:** Learn optimal policies through interaction.
+
+**Use cases:**
+- Unknown or uncertain system dynamics
+- Adaptive control that learns from operational data
+- Real-time optimization with prediction updates
+
+**Approach:** Use `evaluate_operation()` as environment, learn Q-values or policy networks.
+
+### Choosing an Optimizer
+
+| Algorithm | Speed | Optimality | Problem Types | Maturity |
+|-----------|-------|------------|---------------|----------|
+| **LP** | Fast | Globally optimal | Linear, convex | ✅ Implemented |
+| **Greedy** | Very fast | Sub-optimal | Any (heuristic) | ✅ Implemented |
+| **MILP** | Medium | Globally optimal | Linear + discrete | 🚧 Planned |
+| **DP** | Medium | Globally optimal | Sequential, discrete state | 🚧 Planned |
+| **GA** | Slow | Near-optimal | Non-linear, non-convex | 🚧 Planned |
+| **PSO** | Medium | Near-optimal | Non-linear, continuous | 🚧 Planned |
+| **SA** | Medium | Near-optimal | Non-linear, non-convex | 🚧 Planned |
+| **RL** | Slow (training) | Near-optimal | Unknown dynamics | 🚧 Planned |
+
+### Model Representations
+
+Different optimization algorithms require different model representations. FlexAssets support multiple representations through dedicated methods:
+
+- **Operational interface** (`evaluate_operation`, `execute_operation`): Used by greedy, GA, PSO, SA, RL
+- **Linear model** (`get_linear_model`): Used by LP, MILP
+- **State-space model** (future: `get_dp_model`): Used by DP
+- **Differentiable model** (future: `get_torch_model`): Used by gradient-based RL
+
+As new optimizers are implemented, corresponding representation methods will be added to FlexAsset classes. A model consistency test framework ensures all representations produce equivalent results.
+
+---
+
+## Visualization Framework
+
+The framework includes an interactive visualization toolkit for analyzing optimization results and supporting business decision-making.
+
+### Installation
+
+Install visualization dependencies:
+```bash
+pip install -e .[visualization]
+# or manually:
+pip install plotly pandas
+```
+
+### Key Components
+
+**OptimizationResult**: Wrapper for optimizer outputs with convenient data extraction methods
+- `get_power_profile()` - Extract power dispatch time-series
+- `get_soc_profile()` - Extract state of charge evolution
+- `get_cost_breakdown()` - Parse cost components by asset
+- `get_utilization_metrics()` - Calculate capacity factors, cycle counts
+
+**EconomicMetrics**: Calculator for financial KPIs
+- `compute_roi()` - Return on investment [%]
+- `compute_payback_period()` - Years to break even
+- `compute_npv()` - Net present value with discounting
+- `compute_lcoe()` - Levelized cost of energy
+- `compute_financial_summary()` - Complete KPI dashboard
+
+**Visualization Plots**: Interactive Plotly visualizations
+- **Operational**: Power dispatch profiles, SOC evolution, price overlays
+- **Economic**: Cost breakdown, savings comparison, ROI gauges, payback timelines
+- **Executive**: Multi-panel financial dashboards
+
+### Example Usage
+
+```python
+from flex_model.visualization import OptimizationResult, EconomicMetrics
+from flex_model.visualization.plots import OperationalPlots, EconomicPlots
+
+# Run optimization
+result_dict = optimizer.solve()
+
+# Wrap result
+result = OptimizationResult(
+    lp_result=result_dict,
+    assets={'battery': battery, 'market': market},
+    imbalance=imbalance_profile,
+    dt_hours=0.25
+)
+
+# Generate visualizations
+fig1 = OperationalPlots.create_dispatch_profile(result)
+fig2 = OperationalPlots.create_soc_evolution(result, 'battery')
+fig3 = EconomicPlots.create_savings_comparison(baseline_cost, optimized_cost)
+
+# Display (in Jupyter) or save
+fig1.show()
+fig2.write_html('soc_evolution.html')
+
+# Calculate economic metrics
+financial_summary = EconomicMetrics.compute_financial_summary(
+    result=result,
+    baseline_cost=baseline_cost_annual,
+    lifetime_years=10,
+    discount_rate=0.05
+)
+
+print(f"ROI: {financial_summary['roi']:.1f}%")
+print(f"Payback: {financial_summary['payback_period']:.1f} years")
+```
+
+### Running the Example
+
+See a complete demonstration in `examples/battery_vs_market/visualize_results.py`:
+
+```bash
+cd examples/battery_vs_market
+python visualize_results.py
+```
+
+This generates 8 interactive HTML visualizations:
+1. Power dispatch profile (stacked area chart)
+2. SOC evolution with limits
+3. Price signals and market operations
+4. Cost breakdown by asset
+5. Savings vs baseline comparison
+6. ROI gauge with target benchmark
+7. Payback period timeline
+8. Comprehensive financial dashboard
+
+### Visualization Gallery
+
+**Power Dispatch Profile**: Shows how imbalances are balanced across battery and market
+- Stacked area chart showing charge/discharge, import/export
+- Imbalance profile overlay for context
+- Toggle between system view and individual asset contributions
+
+**SOC Evolution**: Battery state of charge with operating limits
+- Line chart with SOC bounds (min/max) as reference
+- Highlights constraint violations if any occur
+- Dual y-axis showing both % and absolute energy [kWh]
+
+**Economic Dashboard**: Multi-panel KPI summary for executives
+- ROI gauge with color-coded targets
+- Payback period bar chart vs lifetime
+- Cost comparison (baseline vs optimized)
+- Key metrics table (NPV, LCOE, savings)
+
+All visualizations are:
+- **Interactive**: Hover for details, zoom, pan, export images
+- **Customizable**: Plotly figures can be modified before saving
+- **Business-focused**: Designed for stakeholder communication
+- **Web-ready**: Export to standalone HTML files
 
 ---
 

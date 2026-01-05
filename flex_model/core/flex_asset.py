@@ -60,13 +60,13 @@ TYPICAL WORKFLOW
     optimal_schedule = optimizer.solve()
 
 5. Evaluate operation (during optimization):
-    result = battery_flex.evaluate_operation(t=10, dt_hours=0.25, P_grid_import=20.0, P_grid_export=0.0)
+    result = battery_flex.evaluate_operation(t=10, P_grid_import=20.0, P_grid_export=0.0)
     if result['feasible']:
         cost = result['cost']
         # ... use in objective function ...
 
 6. Execute operation (after optimization):
-    battery_flex.execute_operation(t=10, dt_hours=0.25, P_grid_import=20.0, P_grid_export=0.0)
+    battery_flex.execute_operation(t=10, P_grid_import=20.0, P_grid_export=0.0)
 
 7. Get metrics:
     metrics = battery_flex.get_metrics()
@@ -170,18 +170,18 @@ class FlexAsset(ABC):
     def evaluate_operation(
         self,
         t: int,
-        dt_hours: float,
         P_grid_import: float,
         P_grid_export: float,
+        n_timesteps: int = 1,
     ) -> Dict[str, Any]:
         """
         Evaluate an operational decision without executing it.
 
         Args:
             t: Time index (integer).
-            dt_hours: Duration of the time step [h].
             P_grid_import: Proposed power import from grid [kW] for this time step.
             P_grid_export: Proposed power export to grid [kW] for this time step.
+            n_timesteps: Number of time steps (default: 1).
 
         Returns:
             Dictionary containing at minimum:
@@ -195,6 +195,7 @@ class FlexAsset(ABC):
         Notes:
             - Must be STATELESS (no modifications to self.unit or tracking).
             - Called repeatedly during optimization.
+            - Time duration is calculated as: delta_t = n_timesteps * FlexAsset.dt_hours
         """
         raise NotImplementedError
 
@@ -202,23 +203,24 @@ class FlexAsset(ABC):
     def execute_operation(
         self,
         t: int,
-        dt_hours: float,
         P_grid_import: float,
         P_grid_export: float,
+        n_timesteps: int = 1,
     ) -> None:
         """
         Execute an operational decision, updating physical state and metrics.
 
         Args:
             t: Time index (integer).
-            dt_hours: Duration of the time step [h].
             P_grid_import: Power import from grid command [kW] to execute.
             P_grid_export: Power export to grid command [kW] to execute.
+            n_timesteps: Number of time steps (default: 1).
 
         Notes:
             - DOES modify state (calls self.unit.update_state()).
             - Updates tracking: _total_throughput_kwh, _total_cost_eur, _num_activations.
             - Caller ensures feasibility before calling.
+            - Time duration is calculated as: delta_t = n_timesteps * FlexAsset.dt_hours
         """
         raise NotImplementedError
 

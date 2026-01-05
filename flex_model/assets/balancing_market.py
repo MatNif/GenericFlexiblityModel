@@ -210,9 +210,9 @@ class BalancingMarketFlex(FlexAsset):
     def evaluate_operation(
         self,
         t: int,
-        dt_hours: float,
         P_grid_import: float,
         P_grid_export: float,
+        n_timesteps: int = 1,
     ) -> Dict[str, Any]:
         """
         Evaluate imbalance settlement operation.
@@ -221,9 +221,9 @@ class BalancingMarketFlex(FlexAsset):
 
         Args:
             t: Time index (integer).
-            dt_hours: Duration of the time step [h].
             P_grid_import: Positive imbalance power [kW].
             P_grid_export: Negative imbalance power [kW].
+            n_timesteps: Number of time steps.
 
         Returns:
             Dictionary:
@@ -233,11 +233,14 @@ class BalancingMarketFlex(FlexAsset):
                     'violations': [] (always empty),
                 }
         """
+        # Calculate time duration using FlexAsset class property
+        delta_t = n_timesteps * FlexAsset.dt_hours
+
         # Prepare activation dict
         activation = {
             'P_grid_import': P_grid_import,
             'P_grid_export': P_grid_export,
-            'dt_hours': dt_hours,
+            'dt_hours': delta_t,
         }
 
         # Calculate cost (no physical state for market)
@@ -247,16 +250,16 @@ class BalancingMarketFlex(FlexAsset):
             'feasible': True,  # Market always available
             'cost': cost,
             'violations': [],
-            'E_import': P_grid_import * dt_hours,
-            'E_export': P_grid_export * dt_hours,
+            'E_import': P_grid_import * delta_t,
+            'E_export': P_grid_export * delta_t,
         }
 
     def execute_operation(
         self,
         t: int,
-        dt_hours: float,
         P_grid_import: float,
         P_grid_export: float,
+        n_timesteps: int = 1,
     ) -> None:
         """
         Execute imbalance settlement operation.
@@ -265,22 +268,25 @@ class BalancingMarketFlex(FlexAsset):
 
         Args:
             t: Time index (integer).
-            dt_hours: Duration of the time step [h].
             P_grid_import: Positive imbalance power [kW].
             P_grid_export: Negative imbalance power [kW].
+            n_timesteps: Number of time steps.
         """
+        # Calculate time duration using FlexAsset class property
+        delta_t = n_timesteps * FlexAsset.dt_hours
+
         # Prepare activation dict
         activation = {
             'P_grid_import': P_grid_import,
             'P_grid_export': P_grid_export,
-            'dt_hours': dt_hours,
+            'dt_hours': delta_t,
         }
 
         # Calculate cost
         cost = self.cost_model.step_cost(t=t, flex_state=None, activation=activation)
 
         # Update tracking
-        throughput = (P_grid_import + P_grid_export) * dt_hours
+        throughput = (P_grid_import + P_grid_export) * delta_t
         self._total_throughput_kwh += throughput
         self._total_cost_eur += cost
         self._num_activations += 1
