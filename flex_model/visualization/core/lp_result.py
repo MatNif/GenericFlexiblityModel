@@ -249,7 +249,7 @@ class LPOptimizationResult(OptimizationResult):
             Future enhancement: Extract detailed cost components from solver.
         """
         breakdown = {
-            'total_cost': self.lp_result['cost'],
+            'total_cost': self.get_total_cost(),
             'by_asset': {}
         }
 
@@ -380,9 +380,9 @@ class LPOptimizationResult(OptimizationResult):
         """
         summary = {
             'optimization': {
-                'success': self.lp_result.get('success', False),
-                'total_cost': self.lp_result.get('cost', 0.0),
-                'message': self.lp_result.get('message', ''),
+                'success': self.is_successful(),
+                'total_cost': self.get_total_cost(),
+                'message': self.get_status_message(),
                 'n_timesteps': self.n_timesteps,
                 'dt_hours': self.dt_hours,
                 'total_hours': self.n_timesteps * self.dt_hours,
@@ -404,10 +404,37 @@ class LPOptimizationResult(OptimizationResult):
 
         return summary
 
+    def get_total_cost(self) -> float:
+        """
+        Get the total cost (objective value) from LP optimization.
+
+        Returns:
+            Total cost [EUR] from LP solver objective function.
+        """
+        return self.lp_result.get('cost', 0.0)
+
+    def is_successful(self) -> bool:
+        """
+        Check if LP optimization completed successfully.
+
+        Returns:
+            True if LP solver found optimal/feasible solution, False otherwise.
+        """
+        return self.lp_result.get('success', False)
+
+    def get_status_message(self) -> str:
+        """
+        Get human-readable status message from LP solver.
+
+        Returns:
+            Status message string from LP solver (e.g., "Optimal solution found").
+        """
+        return self.lp_result.get('message', 'No status message available')
+
     def __repr__(self) -> str:
         """String representation of optimization result."""
-        status = "SUCCESS" if self.lp_result.get('success') else "FAILED"
-        cost = self.lp_result.get('cost', 0.0)
+        status = "SUCCESS" if self.is_successful() else "FAILED"
+        cost = self.get_total_cost()
         n_assets = len(self.assets)
         return (f"LPOptimizationResult(status={status}, cost={cost:.2f} EUR, "
                 f"n_assets={n_assets}, n_timesteps={self.n_timesteps})")

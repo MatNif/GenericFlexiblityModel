@@ -206,6 +206,60 @@ class OptimizationResult(ABC):
         pass
 
     @abstractmethod
+    def get_total_cost(self) -> float:
+        """
+        Get the total cost (objective value) from optimization.
+
+        This abstracts away optimizer-specific result structures, allowing
+        metrics calculators to work with any optimizer implementation.
+
+        Returns:
+            Total cost/objective value [EUR or currency unit used].
+
+        Example:
+            >>> cost = result.get_total_cost()
+            >>> print(f"Total cost: {cost:.2f} EUR")
+        """
+        pass
+
+    @abstractmethod
+    def is_successful(self) -> bool:
+        """
+        Check if optimization completed successfully.
+
+        Different optimizers may define success differently (e.g., 'optimal',
+        'converged', 'feasible'), but this method provides a unified interface.
+
+        Returns:
+            True if optimization succeeded, False otherwise.
+
+        Example:
+            >>> if result.is_successful():
+            >>>     print("Optimization successful!")
+            >>> else:
+            >>>     print(f"Optimization failed: {result.get_status_message()}")
+        """
+        pass
+
+    @abstractmethod
+    def get_status_message(self) -> str:
+        """
+        Get human-readable status/error message from optimization.
+
+        Provides details about optimization outcome, including error messages
+        if optimization failed.
+
+        Returns:
+            Status message string (e.g., "Optimal solution found",
+            "Infeasible problem", "Converged after 1000 iterations").
+
+        Example:
+            >>> print(result.get_status_message())
+            "Optimal solution found"
+        """
+        pass
+
+    @abstractmethod
     def __repr__(self) -> str:
         """
         String representation of optimization result.
