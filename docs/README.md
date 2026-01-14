@@ -86,7 +86,7 @@ This interface allows optimization algorithms to explore the solution space with
 A complete implementation demonstrating all three layers:
 
 - **BatteryUnit**: Physical model with efficiency, SOC limits, power constraints, self-discharge
-- **BatteryCostModel**: Economic model with degradation costs and energy arbitrage
+- **BatteryCostModel**: Economic model with investment and degradation costs
 - **BatteryFlex**: Operational composition for feasibility checking and execution
 
 **Example**:
@@ -106,11 +106,9 @@ battery_unit = BatteryUnit(
 # 2. Create economic model
 battery_cost = BatteryCostModel(
     name="battery_economics",
-    c_inv=500.0,                          # 500 CHF/kWh investment
-    n_lifetime=10.0,                      # 10 year lifetime
-    p_int=0.05,                           # 0.05 CHF/kWh degradation
-    p_E_buy={0: 0.20, 1: 0.25, ...},      # Time-varying buy prices
-    p_E_sell={0: 0.18, 1: 0.23, ...},     # Time-varying sell prices
+    c_inv=500.0,              # 500 CHF/kWh investment
+    n_lifetime=10.0,          # 10 year lifetime
+    p_int=0.05,               # 0.05 CHF/kWh degradation cost
 )
 
 # 3. Compose operational interface
@@ -454,7 +452,7 @@ This is a research/educational project. Contributions are welcome:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
 
 ---
 

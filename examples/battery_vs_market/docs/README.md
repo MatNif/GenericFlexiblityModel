@@ -33,8 +33,8 @@ Real-time imbalance prices from Swissgrid (Preise für Ausgleichsenergie):
 Time series of actual energy imbalances:
 - `timestep`: Integer time index
 - `imbalance_kw`: Power imbalance at this timestep [kW]
-  - Positive = Need to buy energy (consumed more than scheduled)
-  - Negative = Can sell energy (consumed less than scheduled)
+  - Positive = Surplus (consumed less than scheduled, excess energy available)
+  - Negative = Deficit (consumed more than scheduled, energy needed)
 
 **Source:** Provided by utility company or generated as dummy data for testing
 
