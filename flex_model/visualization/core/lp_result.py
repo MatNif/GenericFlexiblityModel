@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Dict, Any
 
 from flex_model.visualization.core.result_processor import OptimizationResult
+from flex_model.settings import DT_HOURS
 
 try:
     import pandas as pd
@@ -28,7 +29,6 @@ class LPOptimizationResult(OptimizationResult):
         lp_result: Raw LP solver output dict
         assets: Dict of FlexAsset instances used in optimization
         imbalance: Dict mapping timestep -> imbalance power [kW]
-        dt_hours: Timestep duration [h]
         n_timesteps: Number of timesteps in optimization horizon
     """
 
@@ -37,7 +37,6 @@ class LPOptimizationResult(OptimizationResult):
         lp_result: Dict[str, Any],
         assets: Dict[str, Any],
         imbalance: Dict[int, float],
-        dt_hours: float,
     ) -> None:
         """
         Initialize LP result wrapper.
@@ -57,14 +56,10 @@ class LPOptimizationResult(OptimizationResult):
             imbalance:
                 Dict mapping timestep -> imbalance power [kW].
                 Positive = deficit (need import), Negative = excess (can export).
-
-            dt_hours:
-                Timestep duration [h] used in optimization.
         """
         self.lp_result = lp_result
         self.assets = assets
         self.imbalance = imbalance
-        self.dt_hours = dt_hours
         self.n_timesteps = len(imbalance)
 
         # Validate result structure
@@ -213,7 +208,7 @@ class LPOptimizationResult(OptimizationResult):
         p_charge_final = solution.get(f'{battery_name}_P_charge_{self.n_timesteps-1}', 0.0)
         p_discharge_final = solution.get(f'{battery_name}_P_discharge_{self.n_timesteps-1}', 0.0)
 
-        e_final += (p_charge_final * efficiency - p_discharge_final / efficiency) * self.dt_hours
+        e_final += (p_charge_final * efficiency - p_discharge_final / efficiency) * DT_HOURS
         soc_final_percent = (e_final / capacity * 100) if capacity > 0 else 0.0
 
         data['SOC'].append(e_final)
@@ -298,12 +293,12 @@ class LPOptimizationResult(OptimizationResult):
         # Capacity factor (for batteries)
         if hasattr(asset, 'unit') and hasattr(asset.unit, 'power_kw'):
             max_power = asset.unit.power_kw
-            total_hours = self.n_timesteps * self.dt_hours
+            total_hours = self.n_timesteps * DT_HOURS
 
             # Calculate actual throughput
             throughput = sum(power_data['P_charge']) + sum(power_data['P_discharge'])
             throughput += sum(power_data['P_import']) + sum(power_data['P_export'])
-            throughput *= self.dt_hours  # Convert to energy
+            throughput *= DT_HOURS  # Convert to energy
 
             max_throughput = max_power * total_hours
             metrics['capacity_factor'] = throughput / max_throughput if max_throughput > 0 else 0.0
@@ -325,17 +320,17 @@ class LPOptimizationResult(OptimizationResult):
             1 for t in range(self.n_timesteps)
             if abs(power_data['P_net'][t]) > 1e-6
         )
-        metrics['utilization_hours'] = active_timesteps * self.dt_hours
+        metrics['utilization_hours'] = active_timesteps * DT_HOURS
 
         # Cycle counting (for batteries)
         if hasattr(asset, 'unit') and hasattr(asset.unit, 'C_spec'):
             capacity = asset.unit.C_spec
-            total_discharge = sum(power_data['P_discharge']) * self.dt_hours
+            total_discharge = sum(power_data['P_discharge']) * DT_HOURS
             metrics['num_cycles'] = total_discharge / capacity if capacity > 0 else 0.0
 
             # Average cycle depth (simplified: total throughput / (2 * num_cycles * capacity))
             if metrics['num_cycles'] > 0:
-                total_throughput = (sum(power_data['P_charge']) + sum(power_data['P_discharge'])) * self.dt_hours
+                total_throughput = (sum(power_data['P_charge']) + sum(power_data['P_discharge'])) * DT_HOURS
                 metrics['avg_cycle_depth'] = (total_throughput / (2 * metrics['num_cycles'] * capacity)) * 100
             else:
                 metrics['avg_cycle_depth'] = 0.0
@@ -384,12 +379,12 @@ class LPOptimizationResult(OptimizationResult):
                 'total_cost': self.get_total_cost(),
                 'message': self.get_status_message(),
                 'n_timesteps': self.n_timesteps,
-                'dt_hours': self.dt_hours,
-                'total_hours': self.n_timesteps * self.dt_hours,
+                'dt_hours': DT_HOURS,
+                'total_hours': self.n_timesteps * DT_HOURS,
             },
             'assets': {},
             'imbalance': {
-                'total_energy': sum(self.imbalance.values()) * self.dt_hours,
+                'total_energy': sum(self.imbalance.values()) * DT_HOURS,
                 'peak_deficit': max(self.imbalance.values()) if self.imbalance else 0.0,
                 'peak_surplus': min(self.imbalance.values()) if self.imbalance else 0.0,
             }

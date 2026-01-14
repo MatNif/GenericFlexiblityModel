@@ -56,7 +56,6 @@ class TestBalancingMarketCost:
         activation = {
             'P_grid_import': 40.0,  # Buy 40 kW
             'P_grid_export': 0.0,
-            'dt_hours': 0.25,  # 15 minutes
         }
 
         step_cost = cost.step_cost(t=0, flex_state=None, activation=activation)
@@ -76,7 +75,6 @@ class TestBalancingMarketCost:
         activation = {
             'P_grid_import': 0.0,
             'P_grid_export': 30.0,  # Sell 30 kW
-            'dt_hours': 0.25,  # 15 minutes
         }
 
         step_cost = cost.step_cost(t=0, flex_state=None, activation=activation)
@@ -97,7 +95,6 @@ class TestBalancingMarketCost:
         activation_buy = {
             'P_grid_import': 40.0,
             'P_grid_export': 0.0,
-            'dt_hours': 0.25,
         }
         cost_buy = cost.step_cost(t=0, flex_state=None, activation=activation_buy)
 
@@ -105,7 +102,6 @@ class TestBalancingMarketCost:
         activation_sell = {
             'P_grid_import': 0.0,
             'P_grid_export': 40.0,
-            'dt_hours': 0.25,
         }
         cost_sell = cost.step_cost(t=0, flex_state=None, activation=activation_sell)
 
@@ -149,7 +145,6 @@ class TestBalancingMarketFlex:
         # Large import - still feasible
         result = market.evaluate_operation(
             t=0,
-            dt_hours=0.25,
             P_grid_import=1000.0,
             P_grid_export=0.0,
         )
@@ -159,7 +154,6 @@ class TestBalancingMarketFlex:
         # Large export - still feasible
         result = market.evaluate_operation(
             t=0,
-            dt_hours=0.25,
             P_grid_import=0.0,
             P_grid_export=1000.0,
         )
@@ -173,7 +167,6 @@ class TestBalancingMarketFlex:
 
         result = market.evaluate_operation(
             t=0,
-            dt_hours=0.25,
             P_grid_import=40.0,
             P_grid_export=0.0,
         )
@@ -194,7 +187,6 @@ class TestBalancingMarketFlex:
         for _ in range(5):
             market.evaluate_operation(
                 t=0,
-                dt_hours=0.25,
                 P_grid_import=40.0,
                 P_grid_export=0.0,
             )
@@ -212,7 +204,6 @@ class TestBalancingMarketFlex:
         # Execute import operation
         market.execute_operation(
             t=0,
-            dt_hours=0.25,
             P_grid_import=40.0,
             P_grid_export=0.0,
         )
@@ -233,7 +224,6 @@ class TestBalancingMarketFlex:
         for _ in range(3):
             market.execute_operation(
                 t=0,
-                dt_hours=0.25,
                 P_grid_import=40.0,
                 P_grid_export=0.0,
             )
@@ -264,7 +254,6 @@ class TestBalancingMarketFlex:
         for _ in range(3):
             market.execute_operation(
                 t=0,
-                dt_hours=0.25,
                 P_grid_import=40.0,
                 P_grid_export=0.0,
             )
@@ -283,8 +272,8 @@ class TestBalancingMarketFlex:
         market = BalancingMarketFlex(cost_model=cost)
 
         # Execute operations
-        market.execute_operation(t=0, dt_hours=0.25, P_grid_import=40.0, P_grid_export=0.0)
-        market.execute_operation(t=1, dt_hours=0.25, P_grid_import=20.0, P_grid_export=0.0)
+        market.execute_operation(t=0, P_grid_import=40.0, P_grid_export=0.0)
+        market.execute_operation(t=1, P_grid_import=20.0, P_grid_export=0.0)
 
         metrics = market.get_metrics()
 
@@ -314,9 +303,7 @@ class TestBalancingMarketIntegration:
             name="battery_cost",
             c_inv=500.0,
             n_lifetime=10.0,
-            p_int=0.05,
-            p_E_buy=0.25,
-            p_E_sell=0.15,
+            p_int=0.05
         )
         battery = BatteryFlex(unit=battery_unit, cost_model=battery_cost)
         battery.reset(E_plus_init=50.0, E_minus_init=50.0)
@@ -354,7 +341,6 @@ class TestBalancingMarketIntegration:
         # Buy during off-peak (cheaper)
         result_offpeak = market.evaluate_operation(
             t=0,
-            dt_hours=1.0,
             P_grid_import=10.0,
             P_grid_export=0.0,
         )
@@ -362,7 +348,6 @@ class TestBalancingMarketIntegration:
         # Buy during peak (expensive)
         result_peak = market.evaluate_operation(
             t=2,
-            dt_hours=1.0,
             P_grid_import=10.0,
             P_grid_export=0.0,
         )

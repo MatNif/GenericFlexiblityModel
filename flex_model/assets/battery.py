@@ -88,12 +88,12 @@ battery_flex = BatteryFlex(unit=battery_unit, cost_model=battery_cost)
 battery_flex.reset(E_plus_init=50.0, E_minus_init=50.0)
 
 # 5. Evaluate operation
-result = battery_flex.evaluate_operation(t=10, dt_hours=0.25, P_draw=0.0, P_inject=30.0)
+result = battery_flex.evaluate_operation(t=10, P_draw=0.0, P_inject=30.0)
 if result['feasible']:
     print(f"Cost: {result['cost']:.2f} CHF, SOC after: {result['soc']:.1%}")
 
 # 6. Execute operation
-battery_flex.execute_operation(t=10, dt_hours=0.25, P_draw=0.0, P_inject=30.0)
+battery_flex.execute_operation(t=10, P_draw=0.0, P_inject=30.0)
 
 # 7. Get metrics
 metrics = battery_flex.get_metrics()
@@ -453,7 +453,7 @@ class BatteryUnit(FlexUnit):
         P_self_discharge = capacity * self.self_discharge_per_hour  # [kW]
 
         # Convert powers to energies
-        delta_t = n_timesteps * FlexAsset.dt_hours
+        delta_t = n_timesteps * DT_HOURS
         E_charge_gross = P_import * delta_t  # Energy imported from grid (charging)
         E_discharge_gross = P_export * delta_t  # Energy exported to grid (discharging)
         E_self_discharge = P_self_discharge * delta_t
@@ -557,7 +557,7 @@ class BatteryCostModel(CostModel):
                 Physical state: {'soc': float, 'E_plus': float, 'E_minus': float}
 
             activation:
-                Operation: {'P_grid_import': float, 'P_grid_export': float, 'dt_hours': float}
+                Operation: {'P_grid_import': float, 'P_grid_export': float}
 
         Returns:
             Operational cost [CHF] for this time step.
@@ -565,14 +565,13 @@ class BatteryCostModel(CostModel):
             No energy prices - battery is an owned asset.
         """
         # Validate and extract activation parameters (REQUIRED - fail fast if missing)
-        self._validate_activation_keys(activation, {'P_grid_import', 'P_grid_export', 'dt_hours'})
+        self._validate_activation_keys(activation, {'P_grid_import', 'P_grid_export'})
 
         P_import = activation['P_grid_import']
         P_export = activation['P_grid_export']
-        dt_hours = activation['dt_hours']
 
         # Internal utilization cost (degradation/cycling wear)
-        throughput_kwh = (P_import + P_export) * dt_hours
+        throughput_kwh = (P_import + P_export) * DT_HOURS
         cost_usage = throughput_kwh * self.p_int(t)
 
         return cost_usage
@@ -652,7 +651,7 @@ class BatteryFlex(FlexAsset):
         # Calculate expected SOC after operation
         # Importing (charging): E_plus increases by P_import * dt * eff
         # Exporting (discharging): E_plus decreases by P_export * dt / eff
-        delta_t = n_timesteps * FlexAsset.dt_hours
+        delta_t = n_timesteps * DT_HOURS
         current_soc = self.unit.soc()
         delta_E = (P_grid_import * delta_t * self.unit.efficiency -
                    P_grid_export * delta_t / self.unit.efficiency)
@@ -677,7 +676,6 @@ class BatteryFlex(FlexAsset):
             activation = {
                 'P_grid_import': P_grid_import,
                 'P_grid_export': P_grid_export,
-                'dt_hours': delta_t,
             }
             cost = self.cost_model.step_cost(t, flex_state, activation)
         else:
@@ -721,7 +719,7 @@ class BatteryFlex(FlexAsset):
         )
 
         # Calculate total time delta
-        delta_t = n_timesteps * FlexAsset.dt_hours
+        delta_t = n_timesteps * DT_HOURS
 
         # Calculate cost for tracking
         flex_state = {
@@ -731,8 +729,7 @@ class BatteryFlex(FlexAsset):
         }
         activation = {
             'P_grid_import': P_grid_import,
-            'P_grid_export': P_grid_export,
-            'dt_hours': delta_t,
+            'P_grid_export': P_grid_export
         }
         cost = self.cost_model.step_cost(t, flex_state, activation)
 
@@ -799,7 +796,6 @@ class BatteryFlex(FlexAsset):
     def get_linear_model(
         self,
         n_timesteps: int,
-        dt_hours: float,
         initial_soc: float = 0.5,
     ) -> LinearModel:
         """
@@ -810,7 +806,6 @@ class BatteryFlex(FlexAsset):
 
         Args:
             n_timesteps: Number of timesteps in optimization horizon.
-            dt_hours: Duration of each timestep [h].
             initial_soc: Initial state of charge [0-1].
 
         Returns:
@@ -853,9 +848,9 @@ class BatteryFlex(FlexAsset):
         cost_coefficients = np.zeros(n_vars)
         for t in range(n_timesteps):
             # Degradation cost for charging
-            cost_coefficients[t] = self.cost_model.p_int(t) * dt_hours
+            cost_coefficients[t] = self.cost_model.p_int(t) * DT_HOURS
             # Degradation cost for discharging
-            cost_coefficients[n_timesteps + t] = self.cost_model.p_int(t) * dt_hours
+            cost_coefficients[n_timesteps + t] = self.cost_model.p_int(t) * DT_HOURS
 
         # Build constraints
         constraints_eq = []
@@ -875,12 +870,12 @@ class BatteryFlex(FlexAsset):
         # Rearranged: E[t+1] - E[t] - P_charge[t]*eff*dt + P_discharge[t]/eff*dt = -self_discharge*capacity*dt
         for t in range(n_timesteps - 1):
             row = np.zeros(n_vars)
-            row[t] = -efficiency * dt_hours  # P_charge[t]
-            row[n_timesteps + t] = dt_hours / efficiency  # P_discharge[t]
+            row[t] = -efficiency * DT_HOURS  # P_charge[t]
+            row[n_timesteps + t] = DT_HOURS / efficiency  # P_discharge[t]
             row[2 * n_timesteps + t] = -1.0  # E[t]
             row[2 * n_timesteps + t + 1] = 1.0  # E[t+1]
             constraints_eq.append(row)
-            bounds_eq.append(-self_discharge_rate * capacity * dt_hours)
+            bounds_eq.append(-self_discharge_rate * capacity * DT_HOURS)
 
         # Convert to numpy arrays
         A_eq = np.array(constraints_eq) if constraints_eq else None

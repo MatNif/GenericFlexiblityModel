@@ -9,6 +9,7 @@ without any FlexAssets.
 from typing import Dict, Tuple
 from pathlib import Path
 import sys
+from flex_model.settings import DT_HOURS
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
@@ -20,7 +21,6 @@ def calculate_baseline_cost(
     imbalance: Dict[int, float],
     p_buy: Dict[int, float],
     p_sell: Dict[int, float],
-    dt_hours: float = 0.25,
 ) -> Tuple[float, float]:
     """
     Calculate pure market settlement baseline cost without FlexAssets.
@@ -41,9 +41,6 @@ def calculate_baseline_cost(
         p_sell:
             Dict mapping timestep -> sell price [CHF/kWh].
             Price for exporting energy to the market.
-
-        dt_hours:
-            Timestep duration [hours]. Default: 0.25 (15 minutes).
 
     Returns:
         Tuple of (baseline_cost, baseline_cost_annual):
@@ -102,8 +99,8 @@ def calculate_baseline_cost(
             baseline_cost += result['cost']
 
     # Annualize baseline cost
-    # Assumes timestep resolution (dt_hours) and 96 timesteps/day (15-min resolution)
-    timesteps_per_day = 24 / dt_hours  # e.g., 96 for 15-min timesteps
+    # Assumes timestep resolution (DT_HOURS) and 96 timesteps/day (15-min resolution)
+    timesteps_per_day = 24 / DT_HOURS  # e.g., 96 for 15-min timesteps
     days_in_scenario = len(imbalance) / timesteps_per_day
     baseline_cost_annual = baseline_cost * (365 / days_in_scenario)
 

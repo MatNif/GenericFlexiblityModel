@@ -203,7 +203,7 @@ class TestBatteryCostModel:
         )
 
         flex_state = {'soc': 0.5, 'E_plus': 50.0, 'E_minus': 50.0}
-        activation = {'P_grid_import': 40.0, 'P_grid_export': 0.0, 'dt_hours': 0.25}
+        activation = {'P_grid_import': 40.0, 'P_grid_export': 0.0}
 
         step_cost = cost.step_cost(t=0, flex_state=flex_state, activation=activation)
 
@@ -224,7 +224,7 @@ class TestBatteryCostModel:
         )
 
         flex_state = {'soc': 0.5, 'E_plus': 50.0, 'E_minus': 50.0}
-        activation = {'P_grid_import': 0.0, 'P_grid_export': 40.0, 'dt_hours': 0.25}
+        activation = {'P_grid_import': 0.0, 'P_grid_export': 40.0}
 
         step_cost = cost.step_cost(t=0, flex_state=flex_state, activation=activation)
 
@@ -245,7 +245,7 @@ class TestBatteryCostModel:
         )
 
         flex_state = {'soc': 0.5, 'E_plus': 50.0, 'E_minus': 50.0}
-        activation = {'P_grid_import': 40.0, 'P_grid_export': 0.0, 'dt_hours': 0.25}
+        activation = {'P_grid_import': 40.0, 'P_grid_export': 0.0}
 
         # At t=0: buy price = 0.20
         cost_t0 = cost.step_cost(t=0, flex_state=flex_state, activation=activation)
@@ -294,10 +294,10 @@ class TestBatteryCostModel:
             {'soc': 0.4, 'E_plus': 40.0, 'E_minus': 60.0},
         ]
         activations = [
-            {'P_grid_import': 40.0, 'P_grid_export': 0.0, 'dt_hours': 0.25},  # Charge 40 kW
-            {'P_grid_import': 0.0, 'P_grid_export': 0.0, 'dt_hours': 0.25},   # Idle
-            {'P_grid_import': 0.0, 'P_grid_export': 40.0, 'dt_hours': 0.25},  # Discharge 40 kW
-            {'P_grid_import': 0.0, 'P_grid_export': 0.0, 'dt_hours': 0.25},   # Idle
+            {'P_grid_import': 40.0, 'P_grid_export': 0.0},  # Charge 40 kW
+            {'P_grid_import': 0.0, 'P_grid_export': 0.0},   # Idle
+            {'P_grid_import': 0.0, 'P_grid_export': 40.0},  # Discharge 40 kW
+            {'P_grid_import': 0.0, 'P_grid_export': 0.0},   # Idle
         ]
 
         total = cost.total_cost(time_indices, flex_states, activations)

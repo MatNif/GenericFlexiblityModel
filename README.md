@@ -122,7 +122,6 @@ battery.reset(E_plus_init=50.0, E_minus_init=50.0)
 # 5. Evaluate operation (discharge 30 kW for 15 min)
 result = battery.evaluate_operation(
     t=10,
-    dt_hours=0.25,
     P_grid_import=0.0,
     P_grid_export=30.0
 )
@@ -132,7 +131,7 @@ if result['feasible']:
     print(f"SOC after: {result['soc']:.1%}")
 
     # 6. Execute if optimal
-    battery.execute_operation(t=10, dt_hours=0.25, P_grid_import=0.0, P_grid_export=30.0)
+    battery.execute_operation(t=10, P_grid_import=0.0, P_grid_export=30.0)
 ```
 
 ### 🚧 Planned Implementations
@@ -364,8 +363,7 @@ result_dict = optimizer.solve()
 result = OptimizationResult(
     lp_result=result_dict,
     assets={'battery': battery, 'market': market},
-    imbalance=imbalance_profile,
-    dt_hours=0.25
+    imbalance=imbalance_profile
 )
 
 # Generate visualizations

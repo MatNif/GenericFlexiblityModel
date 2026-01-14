@@ -15,7 +15,7 @@ Separation of concerns:
 Time-dependent interface:
     - All physical properties are functions of time index t (integer)
     - Methods like availability(t), power_limits(t), capacity(t) allow time-varying behavior
-    - Time resolution (dt) is not fixed; the model is horizon-agnostic
+    - Time resolution is not fixed (DT_HOURS can be modified in the settings); the model is horizon-agnostic
 
 Energy headroom concept:
     - E_plus(t): energy that can still be DRAWN (upward flexibility)

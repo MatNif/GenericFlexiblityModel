@@ -50,7 +50,6 @@ TYPICAL WORKFLOW
 3. Evaluate operation (always feasible):
     result = market.evaluate_operation(
         t=10,
-        dt_hours=0.25,
         P_grid_import=50.0,  # Buy 50 kW from market
         P_grid_export=0.0,
     )
@@ -58,23 +57,21 @@ TYPICAL WORKFLOW
     # result['cost'] is the market procurement cost
 
 4. Execute operation:
-    market.execute_operation(t=10, dt_hours=0.25, P_grid_import=50.0, P_grid_export=0.0)
+    market.execute_operation(t=10, P_grid_import=50.0, P_grid_export=0.0)
 
 COMPARISON EXAMPLE
 ------------------
 # Scenario: Cover 50 kW load for 15 minutes
 
 # Option 1: Battery (if available)
-battery_result = battery.evaluate_operation(t=10, dt_hours=0.25,
-                                           P_grid_import=0, P_grid_export=50)
+battery_result = battery.evaluate_operation(t=10, P_grid_import=0, P_grid_export=50)
 if battery_result['feasible']:
     battery_cost = battery_result['cost']  # Degradation + opportunity cost
 else:
     battery_cost = float('inf')
 
 # Option 2: Market
-market_result = market.evaluate_operation(t=10, dt_hours=0.25,
-                                          P_grid_import=50, P_grid_export=0)
+market_result = market.evaluate_operation(t=10, P_grid_import=50, P_grid_export=0)
 market_cost = market_result['cost']  # Direct market price
 
 # Optimizer chooses cheaper option
@@ -87,6 +84,7 @@ from typing import Any, Dict
 from flex_model.core.cost_model import CostModel, TimeDependentValue
 from flex_model.core.flex_asset import FlexAsset
 from flex_model.optimization import LinearModel
+from flex_model.settings import DT_HOURS
 
 
 class BalancingMarketCost(CostModel):
@@ -151,22 +149,20 @@ class BalancingMarketCost(CostModel):
                 Dict with keys:
                     - 'P_grid_import': Positive imbalance power [kW]
                     - 'P_grid_export': Negative imbalance power [kW]
-                    - 'dt_hours': Time step duration [h]
 
         Returns:
             Settlement cost [CHF]. Positive = cost, Negative = revenue.
         """
         # Validate required keys
-        self._validate_activation_keys(activation, {'P_grid_import', 'P_grid_export', 'dt_hours'})
+        self._validate_activation_keys(activation, {'P_grid_import', 'P_grid_export'})
 
         # Extract activation parameters
         P_import = activation['P_grid_import']
         P_export = activation['P_grid_export']
-        dt_hours = activation['dt_hours']
 
         # Calculate energies
-        E_import = P_import * dt_hours  # Energy bought [kWh]
-        E_export = P_export * dt_hours  # Energy sold [kWh]
+        E_import = P_import * DT_HOURS  # Energy bought [kWh]
+        E_export = P_export * DT_HOURS  # Energy sold [kWh]
 
         # Calculate costs
         cost_import = E_import * self.p_E_buy(t)  # Cost of buying
@@ -234,13 +230,12 @@ class BalancingMarketFlex(FlexAsset):
                 }
         """
         # Calculate time duration using FlexAsset class property
-        delta_t = n_timesteps * FlexAsset.dt_hours
+        delta_t = n_timesteps * DT_HOURS
 
         # Prepare activation dict
         activation = {
             'P_grid_import': P_grid_import,
             'P_grid_export': P_grid_export,
-            'dt_hours': delta_t,
         }
 
         # Calculate cost (no physical state for market)
@@ -273,13 +268,12 @@ class BalancingMarketFlex(FlexAsset):
             n_timesteps: Number of time steps.
         """
         # Calculate time duration using FlexAsset class property
-        delta_t = n_timesteps * FlexAsset.dt_hours
+        delta_t = n_timesteps * DT_HOURS
 
         # Prepare activation dict
         activation = {
             'P_grid_import': P_grid_import,
             'P_grid_export': P_grid_export,
-            'dt_hours': delta_t,
         }
 
         # Calculate cost
@@ -327,7 +321,7 @@ class BalancingMarketFlex(FlexAsset):
             'num_activations': self._num_activations,
         }
 
-    def get_linear_model(self, n_timesteps: int, dt_hours: float) -> LinearModel:
+    def get_linear_model(self, n_timesteps: int) -> LinearModel:
         """
         Convert market settlement to linear optimization model.
 
@@ -336,7 +330,6 @@ class BalancingMarketFlex(FlexAsset):
 
         Args:
             n_timesteps: Number of timesteps in optimization horizon.
-            dt_hours: Duration of each timestep [h].
 
         Returns:
             LinearModel representing this market asset.
@@ -361,8 +354,8 @@ class BalancingMarketFlex(FlexAsset):
         # Cost = sum_t [p_buy[t] * P_import[t] * dt - p_sell[t] * P_export[t] * dt]
         cost_coefficients = np.zeros(n_vars)
         for t in range(n_timesteps):
-            cost_coefficients[t] = self.cost_model.p_E_buy(t) * dt_hours  # Import cost
-            cost_coefficients[n_timesteps + t] = -self.cost_model.p_E_sell(t) * dt_hours  # Export revenue (negative cost)
+            cost_coefficients[t] = self.cost_model.p_E_buy(t) * DT_HOURS  # Import cost
+            cost_coefficients[n_timesteps + t] = -self.cost_model.p_E_sell(t) * DT_HOURS  # Export revenue (negative cost)
 
         # No internal constraints (market is unlimited)
         A_eq = None
