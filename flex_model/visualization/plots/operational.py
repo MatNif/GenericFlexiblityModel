@@ -94,8 +94,8 @@ class OperationalPlots:
         imbalance_data = result.get_imbalance_profile()
         imbalance = imbalance_data['imbalance']
 
-        # Convert energy [kWh] to power [kW] by dividing by timestep duration
-        imbalance_kw = [e / DT_HOURS for e in imbalance]
+        # Imbalance values are already in power [kW]
+        imbalance_kw = imbalance
 
         # Create figure
         fig = go.Figure()
@@ -115,11 +115,11 @@ class OperationalPlots:
                 power_data = result.get_power_profile(asset_name)
 
                 for t in range(result.n_timesteps):
-                    # Convert energy [kWh] to power [kW]
-                    total_charge[t] += power_data['P_charge'][t] / DT_HOURS
-                    total_discharge[t] += power_data['P_discharge'][t] / DT_HOURS
-                    total_import[t] += power_data['P_import'][t] / DT_HOURS
-                    total_export[t] += power_data['P_export'][t] / DT_HOURS
+                    # Power profile values are already in power [kW]
+                    total_charge[t] += power_data['P_charge'][t]
+                    total_discharge[t] += power_data['P_discharge'][t]
+                    total_import[t] += power_data['P_import'][t]
+                    total_export[t] += power_data['P_export'][t]
 
             # Add system-level traces as stacked bars
             # Positive contributions (generation/discharge/import)

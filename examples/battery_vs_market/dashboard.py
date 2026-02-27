@@ -274,20 +274,34 @@ def main():
 
     st.sidebar.success(f"✓ Loaded {len(imbalance)} timesteps")
 
-    # Run optimization
-    with st.spinner("Running optimization..."):
-        result, metrics, baseline_cost_annual = run_optimization(
-            capacity_kwh=capacity_kwh,
-            power_kw=power_kw,
-            efficiency=efficiency,
-            inv_cost_per_kwh=inv_cost_per_kwh,
-            lifetime_years=lifetime_years,
-            degradation_per_kwh=degradation_per_kwh,
-            initial_soc=initial_soc,
-            p_buy=p_buy,
-            p_sell=p_sell,
-            imbalance=imbalance
-        )
+    # Run optimization with session state caching
+    # Only re-run when optimization parameters change (not when time-range slider changes)
+    opt_params = (capacity_kwh, power_kw, efficiency, inv_cost_per_kwh,
+                  lifetime_years, degradation_per_kwh, initial_soc)
+
+    if ('opt_params' not in st.session_state or
+        st.session_state.opt_params != opt_params):
+        with st.spinner("Running optimization..."):
+            result, metrics, baseline_cost_annual = run_optimization(
+                capacity_kwh=capacity_kwh,
+                power_kw=power_kw,
+                efficiency=efficiency,
+                inv_cost_per_kwh=inv_cost_per_kwh,
+                lifetime_years=lifetime_years,
+                degradation_per_kwh=degradation_per_kwh,
+                initial_soc=initial_soc,
+                p_buy=p_buy,
+                p_sell=p_sell,
+                imbalance=imbalance
+            )
+        st.session_state.opt_params = opt_params
+        st.session_state.result = result
+        st.session_state.metrics = metrics
+        st.session_state.baseline_cost_annual = baseline_cost_annual
+    else:
+        result = st.session_state.result
+        metrics = st.session_state.metrics
+        baseline_cost_annual = st.session_state.baseline_cost_annual
 
     # Key Metrics Header
     st.header("📊 Key Performance Indicators")

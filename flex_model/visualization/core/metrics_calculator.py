@@ -528,7 +528,8 @@ class EconomicMetrics:
                     p_int = asset.cost_model.p_int(0)
                     power_profile = result.get_power_profile(asset_name)
                     # Throughput = total charge + total discharge (in kWh)
-                    throughput_kwh = sum(power_profile['P_charge']) + sum(power_profile['P_discharge'])
+                    # Convert power [kW] to energy [kWh] by multiplying by timestep duration
+                    throughput_kwh = (sum(power_profile['P_charge']) + sum(power_profile['P_discharge'])) * DT_HOURS
                     annual_throughput = throughput_kwh * annual_scale
                     annual_om = p_int * annual_throughput
                     breakdown['costs']['battery_om'] += annual_om
@@ -542,17 +543,19 @@ class EconomicMetrics:
 
                     # Market import costs
                     for t in range(result.n_timesteps):
-                        p_import_kwh = power_profile['P_import'][t]
-                        if p_import_kwh > 0:
+                        p_import_kw = power_profile['P_import'][t]
+                        if p_import_kw > 0:
                             price_buy = cost_model.p_E_buy(t)
-                            breakdown['costs']['market_import_cost'] += p_import_kwh * price_buy
+                            # Convert power [kW] to energy [kWh] by multiplying by timestep duration
+                            breakdown['costs']['market_import_cost'] += p_import_kw * DT_HOURS * price_buy
 
                     # Market export revenues
                     for t in range(result.n_timesteps):
-                        p_export_kwh = power_profile['P_export'][t]
-                        if p_export_kwh > 0:
+                        p_export_kw = power_profile['P_export'][t]
+                        if p_export_kw > 0:
                             price_sell = cost_model.p_E_sell(t)
-                            breakdown['revenues']['market_export_revenue'] += p_export_kwh * price_sell
+                            # Convert power [kW] to energy [kWh] by multiplying by timestep duration
+                            breakdown['revenues']['market_export_revenue'] += p_export_kw * DT_HOURS * price_sell
 
                     # Scale to annual
                     breakdown['costs']['market_import_cost'] *= annual_scale
@@ -657,26 +660,26 @@ class EconomicMetrics:
                 if hasattr(asset, 'cost_model') and hasattr(asset.cost_model, 'p_int'):
                     p_int = asset.cost_model.p_int(0)
                     for t in range(start_t, end_t):
-                        # Cost of throughput
+                        # Cost of throughput (convert power [kW] to energy [kWh])
                         throughput_t = power_profile['P_charge'][t] + power_profile['P_discharge'][t]
-                        day_cost += p_int * throughput_t
+                        day_cost += p_int * throughput_t * DT_HOURS
 
                 # Market import costs and export revenues
                 if hasattr(asset, 'cost_model'):
                     cost_model = asset.cost_model
                     if hasattr(cost_model, 'p_E_buy') and hasattr(cost_model, 'p_E_sell'):
                         for t in range(start_t, end_t):
-                            # Import costs
+                            # Import costs (convert power [kW] to energy [kWh])
                             p_import = power_profile['P_import'][t]
                             if p_import > 0:
                                 price_buy = cost_model.p_E_buy(t)
-                                day_cost += p_import * price_buy
+                                day_cost += p_import * DT_HOURS * price_buy
 
-                            # Export revenues
+                            # Export revenues (convert power [kW] to energy [kWh])
                             p_export = power_profile['P_export'][t]
                             if p_export > 0:
                                 price_sell = cost_model.p_E_sell(t)
-                                day_revenue += p_export * price_sell
+                                day_revenue += p_export * DT_HOURS * price_sell
 
             daily_costs.append(day_cost)
             daily_revenues.append(day_revenue)

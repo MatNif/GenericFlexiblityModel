@@ -55,7 +55,7 @@ class LPOptimizationResult(OptimizationResult):
 
             imbalance:
                 Dict mapping timestep -> imbalance power [kW].
-                Positive = deficit (need import), Negative = excess (can export).
+                Positive = surplus (excess, can export), Negative = deficit (shortage, need import).
         """
         self.lp_result = lp_result
         self.assets = assets

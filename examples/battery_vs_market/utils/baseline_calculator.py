@@ -31,8 +31,8 @@ def calculate_baseline_cost(
     Args:
         imbalance:
             Dict mapping timestep -> imbalance power [kW].
-            Positive = deficit (need to import from market).
-            Negative = surplus (can export to market).
+            Positive = surplus (excess energy, can export to market).
+            Negative = deficit (shortage, need to import from market).
 
         p_buy:
             Dict mapping timestep -> buy price [CHF/kWh].
@@ -71,30 +71,30 @@ def calculate_baseline_cost(
     for t in range(len(imbalance)):
         imb_kw = imbalance[t]
 
-        if imb_kw > 0:
-            # Deficit: Need to import from market
+        if imb_kw < 0:
+            # Deficit (negative value): Need to import from market
             result = market_baseline.evaluate_operation(
                 t=t,
-                P_grid_import=imb_kw,
+                P_grid_import=abs(imb_kw),
                 P_grid_export=0
             )
             market_baseline.execute_operation(
                 t=t,
-                P_grid_import=imb_kw,
+                P_grid_import=abs(imb_kw),
                 P_grid_export=0
             )
             baseline_cost += result['cost']
         else:
-            # Surplus: Can export to market
+            # Surplus (positive value): Can export to market
             result = market_baseline.evaluate_operation(
                 t=t,
                 P_grid_import=0,
-                P_grid_export=abs(imb_kw)
+                P_grid_export=imb_kw
             )
             market_baseline.execute_operation(
                 t=t,
                 P_grid_import=0,
-                P_grid_export=abs(imb_kw)
+                P_grid_export=imb_kw
             )
             baseline_cost += result['cost']
 

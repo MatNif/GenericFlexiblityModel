@@ -58,10 +58,10 @@ class OptimizationResult(ABC):
             If return_format='dict':
                 {
                     'timesteps': [0, 1, 2, ...],
-                    'P_charge': [values...],      # For batteries (kWh per timestep)
-                    'P_discharge': [values...],   # For batteries (kWh per timestep)
-                    'P_import': [values...],      # For markets (kWh per timestep)
-                    'P_export': [values...],      # For markets (kWh per timestep)
+                    'P_charge': [values...],      # For batteries (kW)
+                    'P_discharge': [values...],   # For batteries (kW)
+                    'P_import': [values...],      # For markets (kW)
+                    'P_export': [values...],      # For markets (kW)
                     'P_net': [values...],         # Net power contribution (kW)
                 }
 
