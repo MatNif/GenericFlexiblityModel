@@ -1,0 +1,36 @@
+# Virtualenvs
+.venv/
+.venv_*/
+venv/
+env/
+ENV/
+**/.venv*/
+**/site-packages/
+
+# Python cache / artifacts
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Git + IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# OS junk
+.DS_Store
+
+# Optional: local data outputs (uncomment if you generate large files)
+# examples/**/data/*.csv

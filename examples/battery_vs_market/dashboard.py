@@ -78,25 +78,30 @@ def get_plotly_template():
 
 @st.cache_data
 def load_data():
-    """Load imbalance prices and profile (cached)."""
+    """Load imbalance prices and profile (cached), with template fallback."""
     data_path = get_data_path()
 
-    prices_file = data_path / 'imbalance_prices.csv'
-    if not prices_file.exists():
-        st.error(f"Price data not found at {prices_file}")
-        st.info("Please add Swissgrid data to examples/battery_vs_market/data/")
+    def pick_file(primary: str, template: str) -> Path:
+        primary_path = data_path / primary
+        template_path = data_path / template
+
+        if primary_path.exists():
+            return primary_path
+
+        if template_path.exists():
+            st.warning(
+                f"Using template file {template_path.name} because {primary_path.name} is missing."
+            )
+            return template_path
+
+        # Neither exists -> hard stop with helpful message
+        st.error(f"Data not found: {primary_path} (and no template {template_path})")
         st.stop()
 
+    prices_file = pick_file("imbalance_prices.csv", "imbalance_prices_template.csv")
     p_buy, p_sell = load_imbalance_prices(str(prices_file))
 
-    profile_file = data_path / 'imbalance_profile.csv'
-    if not profile_file.exists():
-        st.error(f"Imbalance profile not found at {profile_file}")
-        st.info("Run utils/generate_dummy_profile.py first")
-        st.stop()
-
-    # Load imbalance profile (industry standard convention)
-    # Industry convention: positive=surplus (excess), negative=deficit (shortage)
+    profile_file = pick_file("imbalance_profile.csv", "imbalance_profile_template.csv")
     imbalance = load_imbalance_profile(str(profile_file))
 
     return p_buy, p_sell, imbalance
