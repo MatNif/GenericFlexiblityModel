@@ -99,12 +99,12 @@ def load_data():
         st.stop()
 
     prices_file = pick_file("imbalance_prices.csv", "imbalance_prices_template.csv")
-    p_buy, p_sell = load_imbalance_prices(str(prices_file))
+    p_buy, p_sell, start_date = load_imbalance_prices(str(prices_file))
 
     profile_file = pick_file("imbalance_profile.csv", "imbalance_profile_template.csv")
     imbalance = load_imbalance_profile(str(profile_file))
 
-    return p_buy, p_sell, imbalance
+    return p_buy, p_sell, imbalance, start_date
 
 
 def run_optimization(
@@ -270,7 +270,7 @@ def main():
 
     # Load data
     with st.spinner("Loading data..."):
-        p_buy, p_sell, imbalance = load_data()
+        p_buy, p_sell, imbalance, start_date_str = load_data()
 
     st.sidebar.success(f"✓ Loaded {len(imbalance)} timesteps")
 
@@ -355,13 +355,13 @@ def main():
     with operational_tab:
         st.header("Operational Analysis")
 
-        # Set start date for realistic time axis
-        start_date = "2024-01-01 00:00"
-
-        # Calculate time range for sliders
+        # Use actual start date from data file
         import pandas as pd
-        start = pd.to_datetime(start_date)
+        start = pd.to_datetime(start_date_str, format='%d.%m.%Y %H:%M:%S')
         end = start + pd.Timedelta(hours=result.n_timesteps * DT_HOURS)
+
+        # Format for plot functions (they expect "YYYY-MM-DD HH:MM" format)
+        start_date_for_plots = start.strftime('%Y-%m-%d %H:%M')
 
         # Add date range controls
         st.subheader("Time Range Selection")
@@ -385,7 +385,7 @@ def main():
         st.markdown(f"""
         <div style='background-color: #d4edda; border: 2px solid #28a745; border-radius: 5px; padding: 15px; margin: 10px 0;'>
             <h4 style='color: #155724; margin: 0; text-align: center;'>
-                📅 Displaying: <strong>{display_start.strftime('%a %d/%m %H:%M')}</strong> to <strong>{display_end.strftime('%a %d/%m %H:%M')}</strong>
+                📅 Displaying: <strong>{display_start.strftime('%a %d/%m/%Y %H:%M')}</strong> to <strong>{display_end.strftime('%a %d/%m/%Y %H:%M')}</strong>
             </h4>
         </div>
         """, unsafe_allow_html=True)
@@ -394,20 +394,23 @@ def main():
 
         # Power dispatch
         st.subheader("Power Dispatch Profile")
-        fig_dispatch = OperationalPlots.create_dispatch_profile(result, view_mode='system', start_date=start_date, template=plot_template)
+        fig_dispatch = OperationalPlots.create_dispatch_profile(result, view_mode='system', start_date=start_date_for_plots, template=plot_template)
         fig_dispatch.update_xaxes(range=[display_start, display_end])
+        fig_dispatch.update_yaxes(autorange=True)
         st.plotly_chart(fig_dispatch, use_container_width=True)
 
         # SOC evolution
         st.subheader("State of Charge Evolution")
-        fig_soc = OperationalPlots.create_soc_evolution(result, battery_name='BESS', start_date=start_date, template=plot_template)
+        fig_soc = OperationalPlots.create_soc_evolution(result, battery_name='BESS', start_date=start_date_for_plots, template=plot_template)
         fig_soc.update_xaxes(range=[display_start, display_end])
+        fig_soc.update_yaxes(autorange=True)
         st.plotly_chart(fig_soc, use_container_width=True)
 
         # Price overlay
         st.subheader("Price Signals and Market Operations")
-        fig_prices = OperationalPlots.create_price_overlay(result, market_name='market', start_date=start_date, template=plot_template)
+        fig_prices = OperationalPlots.create_price_overlay(result, market_name='market', start_date=start_date_for_plots, template=plot_template)
         fig_prices.update_xaxes(range=[display_start, display_end])
+        fig_prices.update_yaxes(autorange=True)
         st.plotly_chart(fig_prices, use_container_width=True)
 
     with economic_tab:

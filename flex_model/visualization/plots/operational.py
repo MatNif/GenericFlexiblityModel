@@ -471,6 +471,28 @@ class OperationalPlots:
         fig.update_yaxes(title_text="Price [EUR/kWh]", secondary_y=False)
         fig.update_yaxes(title_text="Power [kW]", secondary_y=True)
 
+        # Align dual y-axes at zero for better readability
+        # Calculate ranges for both axes
+        price_min = min(min(p_buy), min(p_sell))
+        price_max = max(max(p_buy), max(p_sell))
+        power_max = max(max(power_data['P_import']), max(power_data['P_export']))
+        power_min = -power_max  # Symmetric around zero for import/export
+
+        # Add 10% padding
+        price_padding = (price_max - price_min) * 0.1
+        power_padding = (power_max - power_min) * 0.1
+
+        # Set ranges to align at zero
+        # Calculate the ratio to align zero points
+        if price_min < 0:
+            # If prices can be negative, align naturally
+            fig.update_yaxes(range=[price_min - price_padding, price_max + price_padding], secondary_y=False)
+            fig.update_yaxes(range=[power_min - power_padding, power_max + power_padding], secondary_y=True)
+        else:
+            # If all prices are positive, align zero at the bottom
+            fig.update_yaxes(range=[0, price_max + price_padding], secondary_y=False)
+            fig.update_yaxes(range=[power_min - power_padding, power_max + power_padding], secondary_y=True)
+
         fig.update_layout(
             title=f'Price Signals and Market Operations: {market_name}',
             hovermode='x unified',

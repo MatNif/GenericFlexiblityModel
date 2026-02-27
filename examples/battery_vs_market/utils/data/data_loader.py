@@ -11,7 +11,7 @@ from typing import Dict, Tuple
 import csv
 
 
-def load_imbalance_prices(filepath: str) -> Tuple[Dict[int, float], Dict[int, float]]:
+def load_imbalance_prices(filepath: str) -> Tuple[Dict[int, float], Dict[int, float], str]:
     """
     Load imbalance prices from Swissgrid CSV file.
 
@@ -36,12 +36,14 @@ def load_imbalance_prices(filepath: str) -> Tuple[Dict[int, float], Dict[int, fl
         filepath: Path to Swissgrid CSV file with imbalance prices.
 
     Returns:
-        (p_buy, p_sell) where:
+        (p_buy, p_sell, start_date) where:
             - p_buy: Dict mapping timestep -> price for positive imbalance [CHF/kWh]
             - p_sell: Dict mapping timestep -> price for negative imbalance [CHF/kWh]
+            - start_date: First timestamp from the CSV (DD.MM.YYYY HH:MM:SS format)
     """
     p_buy = {}
     p_sell = {}
+    start_date = None
 
     with open(filepath, 'r', encoding='utf-8-sig') as f:  # utf-8-sig handles BOM
         reader = csv.reader(f)
@@ -60,9 +62,13 @@ def load_imbalance_prices(filepath: str) -> Tuple[Dict[int, float], Dict[int, fl
                 continue
 
             try:
-                # timestamp = row[0]  # Keep for future use if needed
+                timestamp = row[0]
                 bg_long_ct = float(row[1])   # Price when long (can sell) [ct/kWh]
                 bg_short_ct = float(row[2])  # Price when short (must buy) [ct/kWh]
+
+                # Store first timestamp
+                if start_date is None:
+                    start_date = timestamp
 
                 # Convert from ct/kWh to CHF/kWh
                 p_buy[timestep] = bg_short_ct / 100.0  # BG short = price to buy
@@ -74,7 +80,7 @@ def load_imbalance_prices(filepath: str) -> Tuple[Dict[int, float], Dict[int, fl
                 # Skip rows that can't be parsed
                 continue
 
-    return p_buy, p_sell
+    return p_buy, p_sell, start_date
 
 
 def load_imbalance_profile(filepath: str) -> Dict[int, float]:
