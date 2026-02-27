@@ -55,7 +55,7 @@ env/
 Thumbs.db
 
 # Example data files (but keep templates)
-examples/*/data/*.csv
+examples/*/data/
 !examples/*/data/*_template.csv
 examples/*/results/
 examples/*/output/*.html

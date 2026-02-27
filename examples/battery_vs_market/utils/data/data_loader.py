@@ -215,4 +215,4 @@ def generate_dummy_imbalance_prices(
 
 def get_data_path() -> Path:
     """Return path to data directory."""
-    return Path(__file__).parent.parent / 'data'
+    return Path(__file__).parent.parent.parent / 'data'

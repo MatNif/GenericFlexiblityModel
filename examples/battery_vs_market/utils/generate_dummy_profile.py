@@ -6,7 +6,7 @@ Swissgrid price data.
 """
 
 import csv
-from data_loader import generate_dummy_imbalance_profile, get_data_path, load_imbalance_prices
+from examples.battery_vs_market.utils.data.data_loader import generate_dummy_imbalance_profile, get_data_path, load_imbalance_prices
 
 # Load price data to get the time horizon
 data_path = get_data_path()

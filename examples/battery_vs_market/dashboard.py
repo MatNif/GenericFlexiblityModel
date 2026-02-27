@@ -31,7 +31,7 @@ from flex_model.assets import BalancingMarketCost, BalancingMarketFlex
 from flex_model.optimization import LPOptimizer
 from flex_model.visualization import LPOptimizationResult, EconomicMetrics
 from flex_model.visualization.plots import OperationalPlots, EconomicPlots
-from utils.data_loader import load_imbalance_prices, load_imbalance_profile, get_data_path
+from examples.battery_vs_market.utils.data.data_loader import load_imbalance_prices, load_imbalance_profile, get_data_path
 from utils.baseline_calculator import calculate_baseline_cost
 
 

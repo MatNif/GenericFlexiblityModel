@@ -21,7 +21,7 @@ from flex_model.assets import BatteryUnit, BatteryCostModel, BatteryFlex
 from flex_model.assets import BalancingMarketCost, BalancingMarketFlex
 from flex_model.optimization import LPOptimizer
 from flex_model.settings import DT_HOURS
-from utils.data_loader import load_imbalance_prices, load_imbalance_profile, get_data_path
+from examples.battery_vs_market.utils.data.data_loader import load_imbalance_prices, load_imbalance_profile, get_data_path
 from utils.baseline_calculator import calculate_baseline_cost
 
 # Import visualization framework

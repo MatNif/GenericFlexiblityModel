@@ -12,7 +12,6 @@ Uses a greedy heuristic for battery operation:
 """
 
 from pathlib import Path
-from typing import Dict, Tuple
 import sys
 
 # Add parent directory to path for imports
@@ -20,8 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from flex_model.assets import BatteryUnit, BatteryCostModel, BatteryFlex
 from flex_model.assets import BalancingMarketCost, BalancingMarketFlex
-from flex_model.settings import DT_HOURS
-from utils.data_loader import load_imbalance_prices, load_imbalance_profile, get_data_path
+from examples.battery_vs_market.utils.data.data_loader import load_imbalance_prices, load_imbalance_profile, get_data_path
 
 
 def run_scenario():
