@@ -6,8 +6,9 @@ programs that can be aggregated and solved by an optimizer.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Union
 import numpy as np
+from scipy import sparse
 
 
 @dataclass
@@ -41,6 +42,7 @@ class LinearModel:
         A_eq:
             Coefficient matrix for equality constraints (shape: n_eq x n_vars).
             A_eq @ x == b_eq
+            Can be either dense (np.ndarray) or sparse (scipy.sparse matrix).
 
         b_eq:
             Right-hand side for equality constraints (length n_eq).
@@ -48,6 +50,7 @@ class LinearModel:
         A_ub:
             Coefficient matrix for inequality constraints (shape: n_ub x n_vars).
             A_ub @ x <= b_ub
+            Can be either dense (np.ndarray) or sparse (scipy.sparse matrix).
 
         b_ub:
             Right-hand side for inequality constraints (length n_ub).
@@ -67,9 +70,9 @@ class LinearModel:
     var_names: List[str]
     var_bounds: List[Tuple[float, Optional[float]]]
     cost_coefficients: np.ndarray
-    A_eq: Optional[np.ndarray] = None
+    A_eq: Optional[Union[np.ndarray, sparse.spmatrix]] = None
     b_eq: Optional[np.ndarray] = None
-    A_ub: Optional[np.ndarray] = None
+    A_ub: Optional[Union[np.ndarray, sparse.spmatrix]] = None
     b_ub: Optional[np.ndarray] = None
     power_indices: Dict[int, List[Tuple[int, float]]] = field(default_factory=dict)
 
@@ -85,15 +88,21 @@ class LinearModel:
             raise ValueError(f"cost_coefficients length {len(self.cost_coefficients)} != n_vars {self.n_vars}")
 
         if self.A_eq is not None:
-            if self.A_eq.shape[1] != self.n_vars:
-                raise ValueError(f"A_eq columns {self.A_eq.shape[1]} != n_vars {self.n_vars}")
-            if self.b_eq is None or len(self.b_eq) != self.A_eq.shape[0]:
+            # Handle both dense and sparse matrices
+            n_cols = self.A_eq.shape[1]
+            n_rows = self.A_eq.shape[0]
+            if n_cols != self.n_vars:
+                raise ValueError(f"A_eq columns {n_cols} != n_vars {self.n_vars}")
+            if self.b_eq is None or len(self.b_eq) != n_rows:
                 raise ValueError(f"b_eq length must match A_eq rows")
 
         if self.A_ub is not None:
-            if self.A_ub.shape[1] != self.n_vars:
-                raise ValueError(f"A_ub columns {self.A_ub.shape[1]} != n_vars {self.n_vars}")
-            if self.b_ub is None or len(self.b_ub) != self.A_ub.shape[0]:
+            # Handle both dense and sparse matrices
+            n_cols = self.A_ub.shape[1]
+            n_rows = self.A_ub.shape[0]
+            if n_cols != self.n_vars:
+                raise ValueError(f"A_ub columns {n_cols} != n_vars {self.n_vars}")
+            if self.b_ub is None or len(self.b_ub) != n_rows:
                 raise ValueError(f"b_ub length must match A_ub rows")
 
     def get_summary(self) -> str:

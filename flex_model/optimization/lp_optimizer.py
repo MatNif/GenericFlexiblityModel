@@ -8,6 +8,7 @@ the combined optimization problem with global energy balance constraints.
 from typing import List, Dict, Optional
 import numpy as np
 from scipy.optimize import linprog
+from scipy import sparse
 
 from .linear_model import LinearModel
 
@@ -120,38 +121,46 @@ class LPOptimizer:
         for asset in self.assets:
             bounds.extend(asset.var_bounds)
 
-        # Aggregate constraints
-        constraints_eq = []
-        bounds_eq = []
-        constraints_ub = []
-        bounds_ub = []
+        # Aggregate constraints using sparse matrices
+        # 1. Block-diagonal assembly of per-asset constraints
+        # Need to include empty blocks for assets without constraints to maintain alignment
+        asset_eq_blocks = []
+        asset_eq_rhs = []
+        asset_ub_blocks = []
+        asset_ub_rhs = []
 
-        var_offset = 0
         for asset in self.assets:
-            # Add asset's equality constraints
+            # Always add a block (empty if asset has no constraints)
             if asset.A_eq is not None:
-                for i in range(asset.A_eq.shape[0]):
-                    row = np.zeros(total_vars)
-                    row[var_offset:var_offset + asset.n_vars] = asset.A_eq[i, :]
-                    constraints_eq.append(row)
-                    bounds_eq.append(asset.b_eq[i])
+                # Convert to sparse if it's dense (backward compatibility)
+                if not sparse.issparse(asset.A_eq):
+                    asset_eq_blocks.append(sparse.csr_matrix(asset.A_eq))
+                else:
+                    asset_eq_blocks.append(asset.A_eq)
+                asset_eq_rhs.append(asset.b_eq)
+            else:
+                # Add empty block with shape (0, n_vars) to maintain block structure
+                asset_eq_blocks.append(sparse.csr_matrix((0, asset.n_vars)))
+                asset_eq_rhs.append(np.array([]))
 
-            # Add asset's inequality constraints
             if asset.A_ub is not None:
-                for i in range(asset.A_ub.shape[0]):
-                    row = np.zeros(total_vars)
-                    row[var_offset:var_offset + asset.n_vars] = asset.A_ub[i, :]
-                    constraints_ub.append(row)
-                    bounds_ub.append(asset.b_ub[i])
+                # Convert to sparse if it's dense (backward compatibility)
+                if not sparse.issparse(asset.A_ub):
+                    asset_ub_blocks.append(sparse.csr_matrix(asset.A_ub))
+                else:
+                    asset_ub_blocks.append(asset.A_ub)
+                asset_ub_rhs.append(asset.b_ub)
+            else:
+                # Add empty block with shape (0, n_vars) to maintain block structure
+                asset_ub_blocks.append(sparse.csr_matrix((0, asset.n_vars)))
+                asset_ub_rhs.append(np.array([]))
 
-            var_offset += asset.n_vars
+        # 2. Build energy balance constraints as sparse matrix
+        # One constraint per timestep: sum of all asset net powers = imbalance[t]
+        balance_eq = sparse.lil_matrix((self.n_timesteps, total_vars))
+        balance_rhs = np.zeros(self.n_timesteps)
 
-        # Add global energy balance constraints (one per timestep)
-        # Sum of all asset net powers = imbalance at each timestep
-        # net_power_asset1 + net_power_asset2 + ... = imbalance[t]
         for t in range(self.n_timesteps):
-            row = np.zeros(total_vars)
-
             # For each asset, add its contribution to net power at time t
             var_offset = 0
             for asset in self.assets:
@@ -160,22 +169,47 @@ class LPOptimizer:
                         # var_idx is relative to asset's variables
                         # need to offset to global variable index
                         global_idx = var_offset + var_idx
-                        row[global_idx] = coeff
+                        balance_eq[t, global_idx] = coeff
 
                 var_offset += asset.n_vars
 
-            constraints_eq.append(row)
-            bounds_eq.append(-self.imbalance[t])
+            balance_rhs[t] = -self.imbalance[t]
 
-        # Convert to numpy arrays
-        A_eq = np.array(constraints_eq) if constraints_eq else None
-        b_eq = np.array(bounds_eq) if bounds_eq else None
-        A_ub = np.array(constraints_ub) if constraints_ub else None
-        b_ub = np.array(bounds_ub) if bounds_ub else None
+        # Convert balance to CSC format
+        balance_eq = balance_eq.tocsc()
+
+        # 3. Stack everything together
+        # Combine per-asset constraints into block-diagonal matrix
+        A_eq_assets = sparse.block_diag(asset_eq_blocks, format='csc')
+
+        # Filter out empty RHS arrays before concatenating
+        non_empty_eq_rhs = [rhs for rhs in asset_eq_rhs if len(rhs) > 0]
+        if non_empty_eq_rhs:
+            b_eq_assets = np.concatenate(non_empty_eq_rhs)
+            # Stack with energy balance constraints
+            A_eq = sparse.vstack([A_eq_assets, balance_eq], format='csc')
+            b_eq = np.concatenate([b_eq_assets, balance_rhs])
+        else:
+            # No asset constraints, only energy balance
+            A_eq = balance_eq
+            b_eq = balance_rhs
+
+        # Handle inequality constraints similarly
+        A_ub_assets = sparse.block_diag(asset_ub_blocks, format='csc')
+        non_empty_ub_rhs = [rhs for rhs in asset_ub_rhs if len(rhs) > 0]
+        if non_empty_ub_rhs:
+            A_ub = A_ub_assets
+            b_ub = np.concatenate(non_empty_ub_rhs)
+        else:
+            A_ub = None
+            b_ub = None
 
         print(f"  Total variables: {total_vars}")
-        print(f"  Equality constraints: {len(constraints_eq)}")
-        print(f"  Inequality constraints: {len(constraints_ub)}")
+        print(f"  Equality constraints: {A_eq.shape[0] if A_eq is not None else 0}")
+        print(f"  Inequality constraints: {A_ub.shape[0] if A_ub is not None else 0}")
+        if A_eq is not None and sparse.issparse(A_eq):
+            sparsity = 100.0 * (1.0 - A_eq.nnz / (A_eq.shape[0] * A_eq.shape[1]))
+            print(f"  A_eq sparsity: {sparsity:.3f}% zeros ({A_eq.nnz:,} non-zeros)")
 
         # Solve LP
         print("Solving LP...")

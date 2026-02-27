@@ -812,6 +812,7 @@ class BatteryFlex(FlexAsset):
             LinearModel representing this battery asset.
         """
         import numpy as np
+        from scipy import sparse
 
         # Extract battery parameters
         capacity = self.unit.C_spec
@@ -852,36 +853,36 @@ class BatteryFlex(FlexAsset):
             # Degradation cost for discharging
             cost_coefficients[n_timesteps + t] = self.cost_model.p_int(t) * DT_HOURS
 
-        # Build constraints
-        constraints_eq = []
+        # Build constraints using sparse matrices
+        # Number of equality constraints: 1 (initial SOC) + (n_timesteps - 1) (dynamics)
+        n_eq = n_timesteps
         bounds_eq = []
-        constraints_ub = []
-        bounds_ub = []
+
+        # Build sparse equality constraint matrix
+        A_eq = sparse.lil_matrix((n_eq, n_vars))
 
         # Initial SOC constraint (equality)
         # E[0] = initial_soc * capacity
-        row = np.zeros(n_vars)
-        row[2 * n_timesteps] = 1.0  # E[0]
-        constraints_eq.append(row)
+        A_eq[0, 2 * n_timesteps] = 1.0  # E[0]
         bounds_eq.append(initial_soc * capacity)
 
         # SOC dynamics constraints (equality for each timestep)
         # E[t+1] = E[t] + (P_charge[t] * eff - P_discharge[t] / eff - self_discharge) * dt
         # Rearranged: E[t+1] - E[t] - P_charge[t]*eff*dt + P_discharge[t]/eff*dt = -self_discharge*capacity*dt
         for t in range(n_timesteps - 1):
-            row = np.zeros(n_vars)
-            row[t] = -efficiency * DT_HOURS  # P_charge[t]
-            row[n_timesteps + t] = DT_HOURS / efficiency  # P_discharge[t]
-            row[2 * n_timesteps + t] = -1.0  # E[t]
-            row[2 * n_timesteps + t + 1] = 1.0  # E[t+1]
-            constraints_eq.append(row)
+            A_eq[t + 1, t] = -efficiency * DT_HOURS  # P_charge[t]
+            A_eq[t + 1, n_timesteps + t] = DT_HOURS / efficiency  # P_discharge[t]
+            A_eq[t + 1, 2 * n_timesteps + t] = -1.0  # E[t]
+            A_eq[t + 1, 2 * n_timesteps + t + 1] = 1.0  # E[t+1]
             bounds_eq.append(-self_discharge_rate * capacity * DT_HOURS)
 
-        # Convert to numpy arrays
-        A_eq = np.array(constraints_eq) if constraints_eq else None
-        b_eq = np.array(bounds_eq) if bounds_eq else None
-        A_ub = np.array(constraints_ub) if constraints_ub else None
-        b_ub = np.array(bounds_ub) if bounds_ub else None
+        # Convert to CSC format for efficient arithmetic and solver compatibility
+        A_eq = A_eq.tocsc()
+        b_eq = np.array(bounds_eq)
+
+        # No inequality constraints for now
+        A_ub = None
+        b_ub = None
 
         # Power mapping for energy balance
         # net_power[t] = P_charge[t] - P_discharge[t]
