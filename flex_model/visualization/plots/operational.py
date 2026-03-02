@@ -42,6 +42,7 @@ class OperationalPlots:
         asset_filter: Optional[List[str]] = None,
         start_date: str = None,
         template: str = 'plotly_white',
+        time_range_idx: Optional[tuple] = None,
     ) -> Any:  # go.Figure
         """
         Create power dispatch profile visualization.
@@ -79,6 +80,16 @@ class OperationalPlots:
         # Get timesteps for x-axis
         timesteps = list(range(result.n_timesteps))
 
+        # Apply time range filter if provided
+        if time_range_idx is not None:
+            start_idx, end_idx = time_range_idx
+            timesteps = list(range(start_idx, end_idx))
+            n_timesteps_plot = end_idx - start_idx
+        else:
+            start_idx = 0
+            end_idx = result.n_timesteps
+            n_timesteps_plot = result.n_timesteps
+
         # Create time axis (datetime if start_date provided, otherwise hours)
         if start_date:
             try:
@@ -92,7 +103,10 @@ class OperationalPlots:
 
         # Get imbalance profile (the problem we're solving)
         imbalance_data = result.get_imbalance_profile()
-        imbalance = imbalance_data['imbalance']
+        imbalance_all = imbalance_data['imbalance']
+
+        # Filter imbalance to time range
+        imbalance = [imbalance_all[t] for t in timesteps]
 
         # Imbalance values are already in power [kW]
         imbalance_kw = imbalance
@@ -106,20 +120,20 @@ class OperationalPlots:
         # Extract power data for each asset
         if view_mode == 'system':
             # Aggregate all assets
-            total_charge = [0.0] * result.n_timesteps
-            total_discharge = [0.0] * result.n_timesteps
-            total_import = [0.0] * result.n_timesteps
-            total_export = [0.0] * result.n_timesteps
+            total_charge = [0.0] * n_timesteps_plot
+            total_discharge = [0.0] * n_timesteps_plot
+            total_import = [0.0] * n_timesteps_plot
+            total_export = [0.0] * n_timesteps_plot
 
             for asset_name in assets_to_plot:
                 power_data = result.get_power_profile(asset_name)
 
-                for t in range(result.n_timesteps):
+                for i, t in enumerate(timesteps):
                     # Power profile values are already in power [kW]
-                    total_charge[t] += power_data['P_charge'][t]
-                    total_discharge[t] += power_data['P_discharge'][t]
-                    total_import[t] += power_data['P_import'][t]
-                    total_export[t] += power_data['P_export'][t]
+                    total_charge[i] += power_data['P_charge'][t]
+                    total_discharge[i] += power_data['P_discharge'][t]
+                    total_import[i] += power_data['P_import'][t]
+                    total_export[i] += power_data['P_export'][t]
 
             # Add system-level traces as stacked bars
             # Positive contributions (generation/discharge/import)
@@ -218,6 +232,7 @@ class OperationalPlots:
         battery_name: str,
         start_date: str = None,
         template: str = 'plotly_white',
+        time_range_idx: Optional[tuple] = None,
     ) -> Any:  # go.Figure
         """
         Create SOC evolution visualization for a battery.
@@ -248,7 +263,7 @@ class OperationalPlots:
         colors = get_color_scheme(template)
 
         # Get SOC data
-        soc_data = result.get_soc_profile(battery_name)
+        soc_data_all = result.get_soc_profile(battery_name)
 
         # Get battery parameters
         battery = result.assets[battery_name]
@@ -256,7 +271,18 @@ class OperationalPlots:
         soc_max = battery.unit.soc_max
 
         # Create timesteps (n_timesteps + 1 for SOC which includes initial state)
-        timesteps = list(range(result.n_timesteps + 1))
+        timesteps_all = list(range(result.n_timesteps + 1))
+
+        # Apply time range filter if provided
+        if time_range_idx is not None:
+            start_idx, end_idx = time_range_idx
+            # SOC has one extra value at the beginning (initial state)
+            # For time range [start_idx, end_idx), we want SOC indices [start_idx, end_idx+1)
+            timesteps = list(range(start_idx, end_idx + 1))
+            soc_values = soc_data_all['SOC'][start_idx:end_idx+1]
+        else:
+            timesteps = timesteps_all
+            soc_values = soc_data_all['SOC']
 
         # Create time axis
         if start_date:
@@ -304,9 +330,11 @@ class OperationalPlots:
         )
 
         # Add SOC line
+        # Convert to percentage for display
+        soc_percent = [s for s in soc_values] if isinstance(soc_values[0], (int, float)) and soc_values[0] > 10 else [s * 100 for s in soc_values]
         fig.add_trace(go.Scatter(
             x=time_axis,
-            y=soc_data['SOC_percent'],
+            y=soc_percent,
             mode='lines+markers',
             name='SOC',
             line=dict(color=colors.battery_soc_color, width=3),
@@ -356,6 +384,7 @@ class OperationalPlots:
         market_name: str,
         start_date: str = None,
         template: str = 'plotly_white',
+        time_range_idx: Optional[tuple] = None,
     ) -> Any:  # go.Figure
         """
         Create price signal visualization overlaid with market operations.
@@ -393,6 +422,14 @@ class OperationalPlots:
         # Get timesteps
         timesteps = list(range(result.n_timesteps))
 
+        # Apply time range filter if provided
+        if time_range_idx is not None:
+            start_idx, end_idx = time_range_idx
+            timesteps = list(range(start_idx, end_idx))
+        else:
+            start_idx = 0
+            end_idx = result.n_timesteps
+
         # Create time axis
         if start_date:
             try:
@@ -412,7 +449,12 @@ class OperationalPlots:
             raise ValueError(f"Market '{market_name}' has no cost_model")
 
         # Get power profile
-        power_data = result.get_power_profile(market_name)
+        power_data_all = result.get_power_profile(market_name)
+        # Filter power data to time range
+        power_data = {
+            'P_import': [power_data_all['P_import'][t] for t in timesteps],
+            'P_export': [power_data_all['P_export'][t] for t in timesteps],
+        }
 
         # Create figure with secondary y-axis
         fig = make_subplots(specs=[[{"secondary_y": True}]])
@@ -472,26 +514,52 @@ class OperationalPlots:
         fig.update_yaxes(title_text="Power [kW]", secondary_y=True)
 
         # Align dual y-axes at zero for better readability
-        # Calculate ranges for both axes
+        # Calculate data ranges
         price_min = min(min(p_buy), min(p_sell))
         price_max = max(max(p_buy), max(p_sell))
-        power_max = max(max(power_data['P_import']), max(power_data['P_export']))
-        power_min = -power_max  # Symmetric around zero for import/export
+        power_import_max = max(power_data['P_import'])
+        power_export_max = max(power_data['P_export'])
 
-        # Add 10% padding
-        price_padding = (price_max - price_min) * 0.1
-        power_padding = (power_max - power_min) * 0.1
+        # Add 10% padding to data ranges
+        price_range = price_max - price_min
+        price_padding = price_range * 0.1
+        power_range = power_import_max + power_export_max
+        power_padding = power_range * 0.1
 
-        # Set ranges to align at zero
-        # Calculate the ratio to align zero points
-        if price_min < 0:
-            # If prices can be negative, align naturally
-            fig.update_yaxes(range=[price_min - price_padding, price_max + price_padding], secondary_y=False)
-            fig.update_yaxes(range=[power_min - power_padding, power_max + power_padding], secondary_y=True)
+        # For proper zero alignment on dual axes:
+        # Both axes must have zero at the same vertical pixel position
+        # This requires: (0 - y1_min) / (y1_max - y1_min) = (0 - y2_min) / (y2_max - y2_min)
+
+        if price_min >= 0:
+            # Prices are all positive - zero is at bottom for both axes
+            price_axis_min = 0
+            price_axis_max = price_max + price_padding
+            power_axis_min = 0
+            power_axis_max = max(power_import_max, power_export_max) + power_padding
         else:
-            # If all prices are positive, align zero at the bottom
-            fig.update_yaxes(range=[0, price_max + price_padding], secondary_y=False)
-            fig.update_yaxes(range=[power_min - power_padding, power_max + power_padding], secondary_y=True)
+            # Prices can be negative - align zero proportionally
+            # Set price axis
+            price_axis_min = price_min - price_padding
+            price_axis_max = price_max + price_padding
+
+            # Calculate where zero falls on price axis (as fraction from bottom)
+            price_zero_position = (0 - price_axis_min) / (price_axis_max - price_axis_min)
+
+            # Set power axis so zero is at the same fractional position
+            # We want: power_zero_position = (0 - power_axis_min) / (power_axis_max - power_axis_min)
+            #         = -power_axis_min / (power_axis_max - power_axis_min) = price_zero_position
+            # Solving: power_axis_min = -price_zero_position * (power_axis_max - power_axis_min)
+            #         power_axis_min = -price_zero_position * power_axis_max + price_zero_position * power_axis_min
+            #         power_axis_min * (1 - price_zero_position) = -price_zero_position * power_axis_max
+            #         power_axis_min = -price_zero_position * power_axis_max / (1 - price_zero_position)
+
+            # Use max of import/export as positive range, then calculate negative range
+            power_axis_max = max(power_import_max, power_export_max) + power_padding
+            power_axis_min = -(power_axis_max * price_zero_position / (1 - price_zero_position))
+
+        # Apply the calculated ranges
+        fig.update_yaxes(range=[price_axis_min, price_axis_max], secondary_y=False)
+        fig.update_yaxes(range=[power_axis_min, power_axis_max], secondary_y=True)
 
         fig.update_layout(
             title=f'Price Signals and Market Operations: {market_name}',

@@ -213,16 +213,16 @@ def main():
     capacity_kwh = st.sidebar.number_input(
         "Capacity [kWh]",
         min_value=10.0,
-        max_value=1000.0,
-        value=100.0,
+        max_value=100000.0,
+        value=20000.0,
         step=10.0
     )
 
     power_kw = st.sidebar.number_input(
         "Power [kW]",
         min_value=5.0,
-        max_value=500.0,
-        value=50.0,
+        max_value=5000.0,
+        value=1000.0,
         step=5.0
     )
 
@@ -392,25 +392,40 @@ def main():
 
         st.markdown("---")
 
+        # Create time range tuple for filtering
+        time_range_filter = (range_start_idx, range_end_idx)
+
         # Power dispatch
         st.subheader("Power Dispatch Profile")
-        fig_dispatch = OperationalPlots.create_dispatch_profile(result, view_mode='system', start_date=start_date_for_plots, template=plot_template)
-        fig_dispatch.update_xaxes(range=[display_start, display_end])
-        fig_dispatch.update_yaxes(autorange=True)
+        fig_dispatch = OperationalPlots.create_dispatch_profile(
+            result,
+            view_mode='system',
+            start_date=start_date_for_plots,
+            template=plot_template,
+            time_range_idx=time_range_filter
+        )
         st.plotly_chart(fig_dispatch, use_container_width=True)
 
         # SOC evolution
         st.subheader("State of Charge Evolution")
-        fig_soc = OperationalPlots.create_soc_evolution(result, battery_name='BESS', start_date=start_date_for_plots, template=plot_template)
-        fig_soc.update_xaxes(range=[display_start, display_end])
-        fig_soc.update_yaxes(autorange=True)
+        fig_soc = OperationalPlots.create_soc_evolution(
+            result,
+            battery_name='BESS',
+            start_date=start_date_for_plots,
+            template=plot_template,
+            time_range_idx=time_range_filter
+        )
         st.plotly_chart(fig_soc, use_container_width=True)
 
         # Price overlay
         st.subheader("Price Signals and Market Operations")
-        fig_prices = OperationalPlots.create_price_overlay(result, market_name='market', start_date=start_date_for_plots, template=plot_template)
-        fig_prices.update_xaxes(range=[display_start, display_end])
-        fig_prices.update_yaxes(autorange=True)
+        fig_prices = OperationalPlots.create_price_overlay(
+            result,
+            market_name='market',
+            start_date=start_date_for_plots,
+            template=plot_template,
+            time_range_idx=time_range_filter
+        )
         st.plotly_chart(fig_prices, use_container_width=True)
 
     with economic_tab:
