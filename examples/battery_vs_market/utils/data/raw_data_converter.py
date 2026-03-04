@@ -596,12 +596,13 @@ def plot_diagnostics(prices: pd.DataFrame, imbalance: pd.DataFrame):
           f"max={imbalance['imbalance_kw'].max():.2f}")
 
 
-def convert(config: Optional[ConversionConfig] = None) -> Tuple[Path, Path]:
+def convert(config: Optional[ConversionConfig] = None, no_plot: bool = False) -> Tuple[Path, Path]:
     """
     Main conversion function orchestrating the entire pipeline.
 
     Args:
         config: Conversion configuration (if None, uses defaults)
+        no_plot: If True, skip diagnostic plots (useful when called programmatically)
 
     Returns:
         Tuple of (imbalance_prices_path, imbalance_profile_path)
@@ -663,16 +664,17 @@ def convert(config: Optional[ConversionConfig] = None) -> Tuple[Path, Path]:
         except Exception as e:
             print(f"Warning: Could not save config cache: {e}")
 
-    # Step 5: Plot diagnostics (always run, load from files if needed)
-    print("\n--- Step 5: Diagnostics ---")
-    try:
-        if not conversion_needed:
-            # Load from saved files
-            prices_combined, imbalance_combined = load_output_data(config)
-        # Plot converted and aligned prices and imbalances
-        plot_diagnostics(prices_combined, imbalance_combined)
-    except Exception as e:
-        print(f"Could not plot diagnostics: {e}")
+    # Step 5: Plot diagnostics (skip if no_plot=True)
+    if not no_plot:
+        print("\n--- Step 5: Diagnostics ---")
+        try:
+            if not conversion_needed:
+                # Load from saved files
+                prices_combined, imbalance_combined = load_output_data(config)
+            # Plot converted and aligned prices and imbalances
+            plot_diagnostics(prices_combined, imbalance_combined)
+        except Exception as e:
+            print(f"Could not plot diagnostics: {e}")
 
     return prices_path, profile_path
 

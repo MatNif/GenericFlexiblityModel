@@ -31,7 +31,7 @@ from flex_model.assets import BalancingMarketCost, BalancingMarketFlex
 from flex_model.optimization import LPOptimizer
 from flex_model.visualization import LPOptimizationResult, EconomicMetrics
 from flex_model.visualization.plots import OperationalPlots, EconomicPlots
-from examples.battery_vs_market.utils.data.data_loader import load_imbalance_prices, load_imbalance_profile, get_data_path
+from examples.battery_vs_market.utils.data.data_loader import load_imbalance_prices, load_imbalance_profile, get_data_path, ensure_converted
 from utils.baseline_calculator import calculate_baseline_cost
 
 
@@ -79,6 +79,9 @@ def get_plotly_template():
 @st.cache_data
 def load_data():
     """Load imbalance prices and profile (cached), with template fallback."""
+    # Auto-convert raw data if outputs are missing or stale
+    ensure_converted()
+
     data_path = get_data_path()
 
     def pick_file(primary: str, template: str) -> Path:

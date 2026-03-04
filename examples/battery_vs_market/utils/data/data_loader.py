@@ -222,3 +222,38 @@ def generate_dummy_imbalance_prices(
 def get_data_path() -> Path:
     """Return path to data directory."""
     return Path(__file__).parent.parent.parent / 'data'
+
+
+def ensure_converted() -> None:
+    """
+    Ensure that converted data files (imbalance_prices.csv, imbalance_profile.csv)
+    exist and are up to date relative to the raw source files.
+
+    Runs the conversion pipeline automatically if:
+        - Either output file is missing, OR
+        - Any raw input file is newer than the outputs, OR
+        - The conversion config has changed since the last run.
+
+    Safe to call multiple times — the converter's is_conversion_necessary() check
+    makes it a no-op when outputs are already current.
+
+    Uses a lazy import of raw_data_converter to avoid a circular import
+    (raw_data_converter imports get_data_path from this module).
+    """
+    # Lazy import to avoid circular dependency
+    from .raw_data_converter import ConversionConfig, is_conversion_necessary, convert
+
+    data_path = get_data_path()
+    raw_dir = data_path / 'raw'
+
+    # Only attempt conversion if a raw directory exists at all
+    if not raw_dir.exists():
+        return
+
+    config = ConversionConfig(
+        raw_dir=raw_dir,
+        output_dir=data_path,
+    )
+
+    if is_conversion_necessary(config):
+        convert(config, no_plot=True)

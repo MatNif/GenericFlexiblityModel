@@ -279,10 +279,10 @@ class OperationalPlots:
             # SOC has one extra value at the beginning (initial state)
             # For time range [start_idx, end_idx), we want SOC indices [start_idx, end_idx+1)
             timesteps = list(range(start_idx, end_idx + 1))
-            soc_values = soc_data_all['SOC'][start_idx:end_idx+1]
+            soc_percent = soc_data_all['SOC_percent'][start_idx:end_idx+1]
         else:
             timesteps = timesteps_all
-            soc_values = soc_data_all['SOC']
+            soc_percent = soc_data_all['SOC_percent']
 
         # Create time axis
         if start_date:
@@ -329,9 +329,7 @@ class OperationalPlots:
             annotation_position="left"
         )
 
-        # Add SOC line
-        # Convert to percentage for display
-        soc_percent = [s for s in soc_values] if isinstance(soc_values[0], (int, float)) and soc_values[0] > 10 else [s * 100 for s in soc_values]
+        # Add SOC line (already in percentage 0-100)
         fig.add_trace(go.Scatter(
             x=time_axis,
             y=soc_percent,
